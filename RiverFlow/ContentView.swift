@@ -12,6 +12,26 @@ struct FileItem: Identifiable {
     let url: URL
     let name: String
     let itemType: FileItemType
+    let size: Int64?
+    let modificationDate: Date?
+    
+    // i hate computed properties i hate computed properties i hate computed properties
+    var formattedSize: String {
+        guard let size = size else { return "--" }
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useAll]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: size)
+    }
+    
+    // i love computed properties i love computed properties i love computed properties
+    var formattedDate: String {
+        guard let date = modificationDate else { return "--" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .full
+        formatter.timeStyle = .medium
+        return formatter.string(from: date)
+    }
 }
 
 @Observable
@@ -26,15 +46,26 @@ class FolderViewModel {
     
     func loadCurrentDirectory() {
         do {
+            let dataKeys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
             let content = try FileManager.default.contentsOfDirectory(
                 at: currentDir,
-                includingPropertiesForKeys: [.isDirectoryKey]
+                includingPropertiesForKeys: dataKeys
             )
             
             self.files = content.map { url in
-                let resourceValues = try? url.resourceValues(forKeys: [.isDirectoryKey])
+                let resourceValues = try? url.resourceValues(forKeys: Set(dataKeys))
+                
                 let isDir = resourceValues?.isDirectory ?? false
-                return FileItem(url: url, name: url.lastPathComponent, itemType: isDir ? .DIRECTORY : .FILE)
+                let fileSize = resourceValues?.fileSize
+                let modifDate = resourceValues?.contentModificationDate
+                let finalSize = isDir ? nil : (fileSize != nil ? Int64(fileSize!) : nil)
+                
+                return FileItem(
+                    url: url,
+                    name: url.lastPathComponent,
+                    itemType: isDir ? .DIRECTORY : .FILE,
+                    size: finalSize,
+                    modificationDate: modifDate)
             }
             .sorted {
                 if $0.itemType == .DIRECTORY && $1.itemType == .FILE { return true }
@@ -93,14 +124,29 @@ struct ContentView: View {
             List {
                 ForEach(viewModel.files) { file in
                     HStack {
-                        if file.itemType == .DIRECTORY {
-                            Image(systemName: "folder.fill").foregroundColor(.blue)
-                        } else {
-                            Image(systemName: "doc.fill").foregroundColor(.secondary)
+                        HStack {
+                            if file.itemType == .DIRECTORY {
+                                Image(systemName: "folder.fill").foregroundColor(.blue)
+                            } else {
+                                Image(systemName: "doc.fill").foregroundColor(.secondary)
+                            }
+                            Text(file.name)
+                                .lineLimit(1)
                         }
-                        Text(file.name)
+                        
+                        Spacer()
+                        
+                        Text(file.formattedDate)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 150, alignment: .leading)
+                        
+                        Text(file.formattedSize)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 80, alignment: .trailing)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 2)
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
                         if file.itemType == .DIRECTORY {
