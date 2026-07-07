@@ -6,10 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		A96D190C2FFC308E00387A94 /* RiverFlow.icon in Resources */ = {isa = PBXBuildFile; fileRef = A96D190B2FFC308E00387A94 /* RiverFlow.icon */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		A94079BB2FFB09B800DC31A2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -31,7 +27,6 @@
 		A94079A92FFB09B600DC31A2 /* RiverFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RiverFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A94079BA2FFB09B800DC31A2 /* RiverFlowTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RiverFlowTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A94079C42FFB09B800DC31A2 /* RiverFlowUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RiverFlowUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		A96D190B2FFC308E00387A94 /* RiverFlow.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RiverFlow.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -84,7 +79,6 @@
 				A94079BD2FFB09B800DC31A2 /* RiverFlowTests */,
 				A94079C72FFB09B800DC31A2 /* RiverFlowUITests */,
 				A94079AA2FFB09B600DC31A2 /* Products */,
-				A96D190B2FFC308E00387A94 /* RiverFlow.icon */,
 			);
 			sourceTree = "<group>";
 		};
@@ -218,7 +212,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A96D190C2FFC308E00387A94 /* RiverFlow.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
