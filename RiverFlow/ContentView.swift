@@ -125,6 +125,12 @@ class FolderViewModel {
     var currentDir: URL
     var files: [FileItem] = []
     
+    var showHiddenFiles: Bool = false {
+        didSet {
+            loadCurrentDirectory()
+        }
+    }
+    
     var currentDirName: String {
         return currentDir.path == "/" ? "/" : currentDir.lastPathComponent
     }
@@ -137,9 +143,13 @@ class FolderViewModel {
     func loadCurrentDirectory() {
         do {
             let dataKeys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
+            
+            let options: FileManager.DirectoryEnumerationOptions = showHiddenFiles ? [] : .skipsHiddenFiles
+            
             let content = try FileManager.default.contentsOfDirectory(
                 at: currentDir,
-                includingPropertiesForKeys: dataKeys
+                includingPropertiesForKeys: dataKeys,
+                options: options
             )
             
             let mappedFiles = content.map { url in
@@ -403,6 +413,12 @@ struct ContentView: View {
                         fullPath: viewModel.currentDir.path,
                         folderName: viewModel.currentDirName
                     )
+                }
+                
+                ToolbarItem(placement: .primaryAction) {
+                    Toggle(isOn: $viewModel.showHiddenFiles) {
+                        Label("Show Hidden", systemImage: viewModel.showHiddenFiles ? "eye" : "eye.slash")
+                    }
                 }
                 
                 ToolbarItem(placement: .primaryAction) {
