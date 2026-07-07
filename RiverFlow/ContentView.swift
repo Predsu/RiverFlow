@@ -79,6 +79,45 @@ struct FileItem: Identifiable {
         formatter.timeStyle = .medium
         return formatter.string(from: date)
     }
+    
+    var fileExtensionIconText: String {
+        let exten = url.pathExtension.lowercased()
+        if exten.isEmpty { return "" }
+        
+        // change it later for God's sake
+        switch exten {
+        default: return exten.uppercased()
+        }
+    }
+}
+
+struct FileIconView: View {
+    let file: FileItem
+    var baseSize: CGFloat = 64
+    
+    var body: some View {
+        if file.itemType == .DIRECTORY {
+            Image(systemName: "folder")
+                .font(.system(size: baseSize))
+                .foregroundColor(.blue)
+        } else {
+            ZStack(alignment: .bottom) {
+                Image(systemName: "doc")
+                    .font(.system(size: baseSize))
+                    .foregroundColor(.secondary)
+                
+                if !file.fileExtensionIconText.isEmpty {
+                    Text(file.fileExtensionIconText)
+                        .font(.system(size: baseSize * 0.18, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 2)
+                        .padding(.bottom, baseSize * 0.22)
+                        .lineLimit(1)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+    }
 }
 
 @Observable
@@ -155,9 +194,7 @@ struct FileGridItemView: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: file.itemType == .DIRECTORY ? "folder" : "doc")
-                .font(.system(size: 64))
-                .foregroundColor(file.itemType == .DIRECTORY ? .blue : .secondary)
+            FileIconView(file: file, baseSize: 64)
             Text(file.name)
                 .font(.system(size: 12))
                 .lineLimit(2)
@@ -268,8 +305,7 @@ struct ContentView: View {
                     List {
                         ForEach(viewModel.files) { file in
                             HStack {
-                                Image(systemName: file.itemType == .DIRECTORY ? "folder" : "doc")
-                                    .foregroundColor(file.itemType == .DIRECTORY ? .blue : .secondary)
+                                FileIconView(file: file, baseSize: 64)
                                 Text(file.name)
                                     .lineLimit(1)
                                 
