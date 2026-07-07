@@ -41,15 +41,15 @@ enum SideBarItem: String, CaseIterable, Identifiable {
 
 // ngl i'm starting to like these
 enum ElementsViewStyle: String, CaseIterable, Identifiable {
-    case list = "List"
     case grid = "Grid"
+    case list = "List"
     
     var id: String { self.rawValue }
     
     var iconName: String {
         switch self {
-        case .list: return "list.bullet"
         case .grid: return "square.grid.3x3"
+        case .list: return "list.bullet"
         }
     }
 }
@@ -103,7 +103,7 @@ class FolderViewModel {
                 includingPropertiesForKeys: dataKeys
             )
             
-            self.files = content.map { url in
+            let mappedFiles = content.map { url in
                 let resourceValues = try? url.resourceValues(forKeys: Set(dataKeys))
                 
                 let isDir = resourceValues?.isDirectory ?? false
@@ -118,9 +118,13 @@ class FolderViewModel {
                     size: finalSize,
                     modificationDate: modifDate)
             }
-            .sorted {
-                if $0.itemType == .DIRECTORY && $1.itemType == .FILE { return true }
-                if $0.itemType == .FILE && $1.itemType == .DIRECTORY { return false }
+//            .sorted {
+//                if $0.itemType == .DIRECTORY && $1.itemType == .FILE { return true }
+//                if $0.itemType == .FILE && $1.itemType == .DIRECTORY { return false }
+//                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+//            }
+            
+            self.files = mappedFiles.sorted {
                 return $0.name.localizedStandardCompare($1.name) == .orderedAscending
             }
             
@@ -152,13 +156,13 @@ struct FileGridItemView: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: file.itemType == .DIRECTORY ? "folder" : "doc")
-                .font(.system(size: 42))
+                .font(.system(size: 64))
                 .foregroundColor(file.itemType == .DIRECTORY ? .blue : .secondary)
             Text(file.name)
-                .font(.caption)
-                .lineLimit(1)
+                .font(.system(size: 12))
+                .lineLimit(2)
                 .multilineTextAlignment(.center)
-                .frame(height: 32, alignment: .top)
+                .frame(alignment: .top)
         }
         .padding(8)
         .frame(width: 128)
@@ -191,7 +195,7 @@ struct InteractivePathTitleView: View {
                     .font(.headline)
                     .foregroundColor(.primary)
                     .lineLimit(1)
-                    .truncationMode(.head)
+                    .truncationMode(.middle)
                     // Płynne wejście/wyjście samej ścieżki
                     .transition(.asymmetric(insertion: .opacity.animation(.easeInOut(duration: 0.2)),
                                             removal: .identity))
@@ -243,7 +247,7 @@ struct InteractivePathTitleView: View {
 struct ContentView: View {
     @State private var viewModel = FolderViewModel()
     @State private var selectedSideBarItem: SideBarItem? = .home
-    @State private var selectedElementsViewStyle: ElementsViewStyle = .list
+    @State private var selectedElementsViewStyle: ElementsViewStyle = .grid
     
     let gridCols = [
         GridItem(.adaptive(minimum: 130), spacing: 16)
@@ -329,7 +333,18 @@ struct ContentView: View {
                             }
                         }
                         .padding()
-                        .background()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background()
+                    .contextMenu {
+                        Button(action: {
+                            let pasteboard = NSPasteboard.general
+                            pasteboard.clearContents()
+                            pasteboard.setString(viewModel.currentDir.path, forType: .string)
+                        }) {
+                            Text("Copy Current Directory Path")
+                            Image(systemName: "doc.on.doc")
+                        }
                     }
                 }
             }
