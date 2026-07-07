@@ -39,6 +39,21 @@ enum SideBarItem: String, CaseIterable, Identifiable {
     }
 }
 
+// ngl i'm starting to like these
+enum ElementsViewStyle: String, CaseIterable, Identifiable {
+    case list = "List"
+    case grid = "Grid"
+    
+    var id: String { self.rawValue }
+    
+    var iconName: String {
+        switch self {
+        case .list: return "list.bullet"
+        case .grid: return "square.grid.3x3"
+        }
+    }
+}
+
 struct FileItem: Identifiable {
     let id = UUID()
     let url: URL
@@ -70,6 +85,10 @@ struct FileItem: Identifiable {
 class FolderViewModel {
     var currentDir: URL
     var files: [FileItem] = []
+    
+    var currentDirName: String {
+        return currentDir.path == "/" ? "/" : currentDir.lastPathComponent
+    }
     
     init(startDir: URL = URL(fileURLWithPath: NSHomeDirectory())) {
         self.currentDir = startDir
@@ -126,108 +145,225 @@ class FolderViewModel {
     }
 }
 
+struct FileGridItemView: View {
+    let file: FileItem
+    let onDoubleTap: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: file.itemType == .DIRECTORY ? "folder" : "doc")
+                .font(.system(size: 42))
+                .foregroundColor(file.itemType == .DIRECTORY ? .blue : .secondary)
+            Text(file.name)
+                .font(.caption)
+                .lineLimit(1)
+                .multilineTextAlignment(.center)
+                .frame(height: 32, alignment: .top)
+        }
+        .padding(8)
+        .frame(width: 128)
+        .background(Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            onDoubleTap()
+        }
+        .contextMenu {
+            Button("Copy Full Path") {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(file.url.path, forType: .string)
+            }
+        }
+    }
+}
+
+struct InteractivePathTitleView: View {
+    let fullPath: String
+    let folderName: String
+    
+    @State private var isHoveringPath = false
+    @State private var showCopyFeedback = false
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            if isHoveringPath {
+                Text(fullPath)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    // Płynne wejście/wyjście samej ścieżki
+                    .transition(.asymmetric(insertion: .opacity.animation(.easeInOut(duration: 0.2)),
+                                            removal: .identity))
+            } else {
+                Text(folderName)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .transition(.identity)
+            }
+            
+            if isHoveringPath {
+                Image(systemName: showCopyFeedback ? "checkmark.circle.fill" : "doc.on.doc")
+                    .font(.caption)
+                    .foregroundColor(showCopyFeedback ? .green : .secondary)
+                    .transition(.opacity)
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 8)
+        .background(isHoveringPath ? Color(NSColor.quaternaryLabelColor) : Color.clear)
+        .cornerRadius(4)
+        .frame(minWidth: 140, maxWidth: 320, alignment: .leading)
+        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isHoveringPath)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                isHoveringPath = hovering
+            }
+        }
+        .onTapGesture {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(fullPath, forType: .string)
+            
+            withAnimation(.easeInOut(duration: 0.15)) {
+                showCopyFeedback = true
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    showCopyFeedback = false
+                }
+            }
+        }
+    }
+}
+
 struct ContentView: View {
     @State private var viewModel = FolderViewModel()
     @State private var selectedSideBarItem: SideBarItem? = .home
+    @State private var selectedElementsViewStyle: ElementsViewStyle = .list
+    
+    let gridCols = [
+        GridItem(.adaptive(minimum: 130), spacing: 16)
+    ]
     
     var body: some View {
         NavigationSplitView {
             List(SideBarItem.allCases, selection: $selectedSideBarItem) { item in
-                HStack {
-                    Image(systemName: item.iconName)
-                        .foregroundColor(.secondary)
-                        .frame(width: 20)
-                    Text(item.rawValue)
+                NavigationLink(value: item) {
+                    Label(item.rawValue, systemImage: item.iconName)
                 }
-                .tag(item)
             }
             .listStyle(SidebarListStyle())
-            .frame(minWidth: 180, idealWidth: 200)
-            
+            .navigationTitle("")
         } detail: {
-            VStack(spacing: 0) {
-                HStack {
+            VStack {
+                if selectedElementsViewStyle == .list {
+                    List {
+                        ForEach(viewModel.files) { file in
+                            HStack {
+                                Image(systemName: file.itemType == .DIRECTORY ? "folder" : "doc")
+                                    .foregroundColor(file.itemType == .DIRECTORY ? .blue : .secondary)
+                                Text(file.name)
+                                    .lineLimit(1)
+                                
+                                Spacer()
+                                
+                                Text(file.formattedDate)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 150, alignment: .leading)
+                                
+                                Text(file.formattedSize)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 80, alignment: .trailing)
+                            }
+                            .padding(.vertical, 2)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) {
+                                if file.itemType == .DIRECTORY {
+                                    viewModel.enterDirectory(dir: file)
+                                } else {
+                                    NSWorkspace.shared.open(file.url)
+                                }
+                            }
+                            .contextMenu {
+                                Button(action: {
+                                    let pasteboard = NSPasteboard.general
+                                    pasteboard.clearContents()
+                                    pasteboard.setString(file.url.path, forType: .string)
+                                }) {
+                                    Text("Copy Full Path")
+                                    Image(systemName: "doc.on.doc")
+                                }
+                                
+                                Divider()
+                                
+                                Button(action: {
+                                    do {
+                                        try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
+                                    } catch {
+                                        print("Error while moving item to trash \(error.localizedDescription)")
+                                    }
+                                }) {
+                                    Text("Move to Trash")
+                                    Image(systemName: "trash")
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: gridCols, spacing: 16) {
+                            ForEach(viewModel.files) { file in
+                                FileGridItemView(file: file) {
+                                    if file.itemType == .DIRECTORY {
+                                        viewModel.enterDirectory(dir: file)
+                                    } else {
+                                        NSWorkspace.shared.open(file.url)
+                                    }
+                                }
+                            }
+                        }
+                        .padding()
+                        .background()
+                    }
+                }
+            }
+            .frame(minWidth: 600, minHeight: 400)
+            .navigationTitle("")
+            .toolbar {
+                ToolbarItemGroup(placement: .navigation) {
                     Button(action: { viewModel.goToParentDirectory() }) {
                         Image(systemName: "arrow.up")
                     }
                     .disabled(viewModel.currentDir.path == "/")
                     
-                    Text(viewModel.currentDir.path)
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                    
-                    Spacer()
-                    
                     Button(action: { viewModel.loadCurrentDirectory() }) {
                         Image(systemName: "arrow.clockwise")
                     }
                 }
-                .padding()
-                .background(Color(NSColor.windowBackgroundColor))
                 
-                Divider()
+                ToolbarItem(placement: .navigation) {
+                    InteractivePathTitleView(
+                        fullPath: viewModel.currentDir.path,
+                        folderName: viewModel.currentDirName
+                    )
+                }
                 
-                List {
-                    ForEach(viewModel.files) { file in
-                        HStack {
-                            if file.itemType == .DIRECTORY {
-                                Image(systemName: "folder.fill").foregroundColor(.blue)
-                            } else {
-                                Image(systemName: "doc.fill").foregroundColor(.secondary)
-                            }
-                            Text(file.name)
-                                .lineLimit(1)
-                            
-                            Spacer()
-                            
-                            Text(file.formattedDate)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .frame(width: 150, alignment: .leading)
-                            
-                            Text(file.formattedSize)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .frame(width: 80, alignment: .trailing)
-                        }
-                        .padding(.vertical, 2)
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) {
-                            if file.itemType == .DIRECTORY {
-                                viewModel.enterDirectory(dir: file)
-                            } else {
-                                NSWorkspace.shared.open(file.url)
-                            }
-                        }
-                        .contextMenu {
-                            Button(action: {
-                                let pasteboard = NSPasteboard.general
-                                pasteboard.clearContents()
-                                pasteboard.setString(file.url.path, forType: .string)
-                            }) {
-                                Text("Copy Full Path")
-                                Image(systemName: "doc.on.doc")
-                            }
-                            
-                            Divider()
-                            
-                            Button(action: {
-                                do {
-                                    try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
-                                    viewModel.loadCurrentDirectory() // Odświeżamy listę po usunięciu
-                                } catch {
-                                    print("Error while moving item to trash: \(error.localizedDescription)")
-                                }
-                            }) {
-                                Text("Move to Trash")
-                                Image(systemName: "trash")
-                            }
+                ToolbarItem(placement: .primaryAction) {
+                    Picker("View Style", selection: $selectedElementsViewStyle) {
+                        ForEach(ElementsViewStyle.allCases) { style in
+                            Label(style.rawValue, systemImage: style.iconName)
+                                .tag(style)
                         }
                     }
+                    .pickerStyle(.segmented)
                 }
             }
-            .frame(minWidth: 450, minHeight: 400)
         }
         .onChange(of: selectedSideBarItem) { _, newValue in
             if let newSection = newValue {
