@@ -1,10 +1,14 @@
 import Foundation
 import Observation
+import AppKit
 
 @Observable
 class FolderViewModel {
     var currentDir: URL
     var files: [FileItem] = []
+    
+    var pasteboardURL: URL? = nil
+    var isOperationCut: Bool = false
     
     var showHiddenFiles: Bool = false {
         didSet {
@@ -122,6 +126,64 @@ class FolderViewModel {
             loadCurrentDirectory()
         } else {
             print("Error creating file")
+        }
+    }
+    
+    func copyElement(element: FileItem) {
+        self.pasteboardURL = element.url
+        self.isOperationCut = false
+        
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([element.url as NSURL])
+    }
+    
+    func cutElement(element: FileItem) {
+        self.pasteboardURL = element.url
+        self.isOperationCut = true
+        
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([element.url as NSURL])
+    }
+    
+    func pasteElement() {
+        let finalURL: URL?
+        if let url = pasteboardURL {
+            finalURL = url
+        } else {
+            let pasteboard = NSPasteboard.general
+            finalURL = pasteboard.readObjects(forClasses: [NSURL.self], options: nil)?.first as? URL
+        }
+        
+        guard let sourceURL = finalURL else { return }
+        let destinationURL = currentDir.appendingPathComponent(sourceURL.lastPathComponent)
+        
+        var finalDestinationURL = destinationURL
+        var counter: Int = 1
+        let elementExtension = sourceURL.pathExtension
+        let elementNameWithoutExtension = sourceURL.deletingPathExtension().lastPathComponent
+        
+        while FileManager.default.fileExists(atPath: finalDestinationURL.path) {
+            counter += 1
+            let newName = "\(elementNameWithoutExtension) \(counter)"
+            finalDestinationURL = currentDir.appendingPathComponent(newName)
+            if !elementExtension.isEmpty {
+                finalDestinationURL = finalDestinationURL.appendingPathExtension(elementExtension)
+            }
+        }
+        
+        do {
+            if isOperationCut {
+                try FileManager.default.moveItem(at: sourceURL, to: finalDestinationURL)
+                self.pasteboardURL = nil
+                self.isOperationCut = false
+            } else {
+                try FileManager.default.copyItem(at: sourceURL, to: finalDestinationURL)
+            }
+            loadCurrentDirectory()
+        } catch {
+            print("Error pasting file \(error.localizedDescription)")
         }
     }
 }

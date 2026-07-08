@@ -35,10 +35,12 @@ struct FileGridItemView: View {
     let isSelected: Bool
     let onTap: () -> Void
     let onDoubleTap: () -> Void
+    let onCopy: () -> Void
+    let onCut: () -> Void
     
     var body: some View {
         VStack(spacing: 8) {
-            FileIconView(file: file, baseSize: 48) // lekko odchudzona ikona dla zbalansowania paddingu ramki
+            FileIconView(file: file, baseSize: 48)
             Text(file.name)
                 .font(.system(size: 12))
                 .lineLimit(2)
@@ -47,16 +49,13 @@ struct FileGridItemView: View {
         }
         .padding(10)
         .frame(width: 120, height: 110)
-        // Nadawanie koloru tła selekcji wewnątrz zaokrąglonego kafelka
         .background(isSelected ? Color(.selectedControlColor).opacity(0.15) : Color.clear)
         .cornerRadius(8)
-        // Dynamiczny outline (grubość linii 2px, gdy element jest wybrany)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color(.selectedControlColor), lineWidth: isSelected ? 2 : 0)
         )
         .contentShape(Rectangle())
-        // Naprawiony gest symultaniczny: nie blokuje wątku wejścia przy szybkim klikaniu
         .gesture(
             TapGesture(count: 1)
                 .onEnded {
@@ -70,6 +69,18 @@ struct FileGridItemView: View {
                 )
         )
         .contextMenu {
+            Button(action: onCopy) {
+                Text("Copy Element")
+                Image(systemName: "doc.on.doc")
+            }
+            
+            Button(action: onCut) {
+                Text("Cut Element")
+                Image(systemName: "arrow.right.doc.on.clipboard")
+            }
+            
+            Divider()
+            
             Button(action: {
                 let pasteboard = NSPasteboard.general
                 pasteboard.clearContents()
@@ -112,7 +123,6 @@ struct InteractivePathTitleView: View {
                     .foregroundColor(.primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    // Płynne wejście/wyjście samej ścieżki
                     .transition(.asymmetric(insertion: .opacity.animation(.easeInOut(duration: 0.2)),
                                             removal: .identity))
             } else {

@@ -11,6 +11,7 @@ enum SideBarItem: String, CaseIterable, Identifiable {
     case desktop = "Desktop"
     case documents = "Documents"
     case downloads = "Downloads"
+    case apps = "Apps"
     
     var id: String { self.rawValue }
     
@@ -24,6 +25,8 @@ enum SideBarItem: String, CaseIterable, Identifiable {
             return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         case .downloads:
             return FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        case .apps:
+            return FileManager.default.urls(for: .applicationDirectory, in: .systemDomainMask).first!
         }
     }
     
@@ -33,6 +36,7 @@ enum SideBarItem: String, CaseIterable, Identifiable {
         case .desktop: return "menubar.dock.rectangle"
         case .documents: return "doc.text"
         case .downloads: return "arrow.down.circle"
+        case .apps: return "square.3.layers.3d"
         }
     }
 }
