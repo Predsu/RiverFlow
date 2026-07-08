@@ -32,6 +32,119 @@ struct RightClickCatcher: NSViewRepresentable {
     }
 }
 
+struct FileInfoView: View {
+    let file: FileItem
+    weak var window: NSWindow?
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack(alignment: .top, spacing: 16) {
+                FileIconView(file: file, baseSize: 64)
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(file.name)
+                        .font(.headline)
+                        .lineLimit(2)
+                    
+                    Text(file.itemType == .DIRECTORY ? "Directory" : "File")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            Divider()
+            
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Size:")
+                        .foregroundColor(.secondary)
+                        .frame(width: 80, alignment: .leading)
+                    Text(file.formattedSize)
+                        .textSelection(.enabled)
+                }
+                
+                HStack {
+                    Text("Modification Date:")
+                        .foregroundColor(.secondary)
+                        .frame(width: 80, alignment: .leading)
+                    Text(file.formattedDate)
+                        .textSelection(.enabled)
+                }
+                
+                HStack(alignment: .top) {
+                    Text("Path:")
+                        .foregroundColor(.secondary)
+                        .frame(width: 80, alignment: .leading)
+                    Text(file.url.path)
+                        .font(.system(.body, design: .monospaced))
+                        .lineLimit(1)
+                        .frame(minHeight: 32, maxHeight: 64)
+                        .textSelection(.enabled)
+                        .truncationMode(.head)
+                        .help(file.url.path)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            
+            Spacer()
+            
+            HStack {
+                Spacer()
+                Button("Close") {
+                    window?.performClose(nil)
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 380, height: 260)
+    }
+}
+
+class FileWindowManager: NSObject, NSWindowDelegate {
+    static let shared = FileWindowManager()
+    private var openWindows: [String: NSWindow] = [:]
+    
+    static func openInfoView(for file: FileItem) {
+        shared.openInfoView(for: file)
+    }
+    
+    private func openInfoView(for file: FileItem) {
+        let windowIdentifier = "elementinfowindow-\(file.id.uuidString)"
+        
+        if let existingWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == windowIdentifier }) {
+            existingWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+        
+        let window = NSWindow(
+            contentRect: NSRect(
+                x: 0,
+                y: 0,
+                width: 380,
+                height: 260),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        
+        window.identifier = NSUserInterfaceItemIdentifier(windowIdentifier)
+        window.title = file.name
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: FileInfoView(file: file, window: window))
+        window.makeKeyAndOrderFront(nil)
+        
+        openWindows[windowIdentifier] = window
+    }
+    
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+            let id = window.identifier?.rawValue else { return }
+        openWindows.removeValue(forKey: id)
+    }
+}
+
 struct FileIconView: View {
     let file: FileItem
     var baseSize: CGFloat = 64
@@ -140,6 +253,15 @@ struct FileGridItemView: View {
                     Image(systemName: "folder.badge.gearshape")
                 }
             }
+            
+            Divider()
+            
+            Button(action: {
+                FileWindowManager.openInfoView(for: file)
+            }) {
+                Text("Element Info")
+                Image(systemName: "info.circle")
+            }
 
             Divider()
 
@@ -160,7 +282,7 @@ struct FileGridItemView: View {
                 pasteboard.clearContents()
                 pasteboard.setString(file.url.path, forType: .string)
             }) {
-                Text("Copy Full Path")
+                Text("Copy Element Path")
                 Image(systemName: "doc.on.doc")
             }
             
@@ -170,7 +292,7 @@ struct FileGridItemView: View {
                 do {
                     try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
                 } catch {
-                    print("Error while moving item to trash \(error.localizedDescription)")
+                    print("Error while moving element to trash \(error.localizedDescription)")
                 }
             }) {
                 Text("Move to Trash")
