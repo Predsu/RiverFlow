@@ -77,4 +77,51 @@ class FolderViewModel {
             loadCurrentDirectory()
         }
     }
+    
+    func createNewDirectory() {
+        var dirName: String = "New Folder"
+        var counter: Int = 1
+        var dirURL = currentDir.appendingPathComponent(dirName)
+        
+        while FileManager.default.fileExists(atPath: dirURL.path) {
+            dirName = "New Folder \(counter)"
+            counter += 1
+            dirURL = currentDir.appendingPathComponent(dirName)
+        }
+        
+        do {
+            try FileManager.default.createDirectory(
+                at: dirURL,
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+            loadCurrentDirectory()
+        } catch {
+            print("Error creating directory \(error.localizedDescription)")
+        }
+    }
+    
+    func createNewFile() {
+        var fileName: String = "Untitled.txt"
+        var counter: Int = 1
+        var fileURL = currentDir.appendingPathComponent(fileName)
+        
+        while FileManager.default.fileExists(atPath: fileURL.path) {
+            fileName = "Untitled \(counter).txt"
+            counter += 1
+            fileURL = currentDir.appendingPathComponent(fileName)
+        }
+        
+        let success = FileManager.default.createFile(
+            atPath: fileURL.path,
+            contents: Data(),
+            attributes: nil
+        )
+            
+        if success {
+            loadCurrentDirectory()
+        } else {
+            print("Error creating file")
+        }
+    }
 }

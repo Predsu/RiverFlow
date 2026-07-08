@@ -32,24 +32,43 @@ struct FileIconView: View {
 
 struct FileGridItemView: View {
     let file: FileItem
+    let isSelected: Bool
+    let onTap: () -> Void
     let onDoubleTap: () -> Void
     
     var body: some View {
         VStack(spacing: 8) {
-            FileIconView(file: file, baseSize: 64)
+            FileIconView(file: file, baseSize: 48) // lekko odchudzona ikona dla zbalansowania paddingu ramki
             Text(file.name)
                 .font(.system(size: 12))
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .frame(alignment: .top)
         }
-        .padding(8)
-        .frame(width: 128)
-        .background(Color.clear)
+        .padding(10)
+        .frame(width: 120, height: 110)
+        // Nadawanie koloru tła selekcji wewnątrz zaokrąglonego kafelka
+        .background(isSelected ? Color(.selectedControlColor).opacity(0.15) : Color.clear)
+        .cornerRadius(8)
+        // Dynamiczny outline (grubość linii 2px, gdy element jest wybrany)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(.selectedControlColor), lineWidth: isSelected ? 2 : 0)
+        )
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            onDoubleTap()
-        }
+        // Naprawiony gest symultaniczny: nie blokuje wątku wejścia przy szybkim klikaniu
+        .gesture(
+            TapGesture(count: 1)
+                .onEnded {
+                    onTap()
+                }
+                .simultaneously(
+                    with: TapGesture(count: 2)
+                        .onEnded {
+                            onDoubleTap()
+                        }
+                )
+        )
         .contextMenu {
             Button(action: {
                 let pasteboard = NSPasteboard.general
@@ -72,6 +91,8 @@ struct FileGridItemView: View {
                 Text("Move to Trash")
                 Image(systemName: "trash")
             }
+            
+            Divider()
         }
     }
 }
