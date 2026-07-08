@@ -1,12 +1,56 @@
 import SwiftUI
 import AppKit
 
+struct RightClickCatcher: NSViewRepresentable {
+    let onRightClick: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = CatcherView()
+        view.onRightClick = onRightClick
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? CatcherView)?.onRightClick = onRightClick
+    }
+
+    private class CatcherView: NSView {
+        var onRightClick: (() -> Void)?
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            if let event = NSApp.currentEvent,
+               event.type == .rightMouseDown || event.type == .rightMouseUp {
+                return self
+            }
+            return nil
+        }
+
+        override func rightMouseDown(with event: NSEvent) {
+            onRightClick?()
+            super.rightMouseDown(with: event)
+        }
+    }
+}
+
 struct FileIconView: View {
     let file: FileItem
     var baseSize: CGFloat = 64
     
+    private var isAppBundle: Bool {
+        return file.url.pathExtension.lowercased() == "app"
+    }
+    
+    private var appIcon: NSImage {
+        return NSWorkspace.shared.icon(forFile: file.url.path)
+    }
+    
     var body: some View {
-        if file.itemType == .DIRECTORY {
+        if isAppBundle {
+            Image(nsImage: appIcon)
+                .resizable()
+                .scaledToFit()
+                .frame(width: baseSize, height: baseSize)
+        } else if file.itemType == .DIRECTORY {
             Image(systemName: "folder")
                 .font(.system(size: baseSize))
                 .foregroundColor(.blue)
@@ -37,6 +81,7 @@ struct FileGridItemView: View {
     let onDoubleTap: () -> Void
     let onCopy: () -> Void
     let onCut: () -> Void
+    let onOpenAsDirectory: () -> Void
     
     var body: some View {
         VStack(spacing: 8) {
@@ -56,6 +101,7 @@ struct FileGridItemView: View {
                 .stroke(Color(.selectedControlColor), lineWidth: isSelected ? 2 : 0)
         )
         .contentShape(Rectangle())
+        .overlay(RightClickCatcher(onRightClick: onTap))
         .gesture(
             TapGesture(count: 1)
                 .onEnded {
@@ -69,6 +115,15 @@ struct FileGridItemView: View {
                 )
         )
         .contextMenu {
+            if file.url.pathExtension == "app" {
+                Button(action: onOpenAsDirectory) {
+                    Text("Show Package Contents")
+                    Image(systemName: "folder.badge.gearshape")
+                }
+            }
+
+            Divider()
+
             Button(action: onCopy) {
                 Text("Copy Element")
                 Image(systemName: "doc.on.doc")
@@ -103,6 +158,102 @@ struct FileGridItemView: View {
                 Image(systemName: "trash")
             }
             
+            Divider()
+        }
+    }
+}
+
+struct FileListItemView: View {
+    let file: FileItem
+    let isSelected: Bool
+    let onTap: () -> Void
+    let onDoubleTap: () -> Void
+    let onCopy: () -> Void
+    let onCut: () -> Void
+    let onOpenAsDirectory: () -> Void
+
+    var body: some View {
+        HStack {
+            FileIconView(file: file, baseSize: 18)
+            Text(file.name)
+                .lineLimit(1)
+
+            Spacer()
+
+            Text(file.formattedDate)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(width: 150, alignment: .leading)
+
+            Text(file.formattedSize)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(width: 80, alignment: .trailing)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(isSelected ? Color(.selectedControlColor).opacity(0.2) : Color.clear)
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(Color(.selectedControlColor), lineWidth: isSelected ? 1.5 : 0)
+        )
+        .contentShape(Rectangle())
+        .gesture(
+            TapGesture(count: 1)
+                .onEnded {
+                    onTap()
+                }
+                .simultaneously(
+                    with: TapGesture(count: 2)
+                        .onEnded {
+                            onDoubleTap()
+                        }
+                )
+        )
+        .contextMenu {
+            if file.url.pathExtension == "app" {
+                Button(action: onOpenAsDirectory) {
+                    Text("Show Package Contents")
+                    Image(systemName: "folder.badge.gearshape")
+                }
+            }
+
+            Divider()
+
+            Button(action: onCopy) {
+                Text("Copy Element")
+                Image(systemName: "doc.on.doc")
+            }
+
+            Button(action: onCut) {
+                Text("Cut Element")
+                Image(systemName: "arrow.right.doc.on.clipboard")
+            }
+
+            Divider()
+
+            Button(action: {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(file.url.path, forType: .string)
+            }) {
+                Text("Copy Full Path")
+                Image(systemName: "doc.on.doc")
+            }
+
+            Divider()
+
+            Button(action: {
+                do {
+                    try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
+                } catch {
+                    print("Error while moving item to trash \(error.localizedDescription)")
+                }
+            }) {
+                Text("Move to Trash")
+                Image(systemName: "trash")
+            }
+
             Divider()
         }
     }

@@ -101,78 +101,34 @@ struct ContentView: View {
     private var listView: some View {
         List {
             ForEach(viewModel.files) { file in
-                HStack {
-                    FileIconView(file: file, baseSize: 18)
-                    Text(file.name)
-                        .lineLimit(1)
-                    
-                    Spacer()
-                    
-                    Text(file.formattedDate)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .frame(width: 150, alignment: .leading)
-                    
-                    Text(file.formattedSize)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .frame(width: 80, alignment: .trailing)
-                }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 6)
-                .background(selectedFileId == file.id ? Color(.selectedControlColor).opacity(0.2) : Color.clear)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(Color(.selectedControlColor), lineWidth: selectedFileId == file.id ? 1.5 : 0)
-                )
-                .contentShape(Rectangle())
-                .gesture(
-                    TapGesture(count: 1)
-                        .onEnded {
-                            selectedFileId = file.id
+                FileListItemView(
+                    file: file,
+                    isSelected: selectedFileId == file.id,
+                    onTap: {
+                        selectedFileId = file.id
+                    },
+                    onDoubleTap: {
+                        selectedFileId = file.id
+                        if file.url.pathExtension == "app" {
+                            NSWorkspace.shared.open(file.url)
+                        } else if file.itemType == .DIRECTORY {
+                            viewModel.enterDirectory(dir: file)
+                            selectedFileId = nil
+                        } else {
+                            NSWorkspace.shared.open(file.url)
                         }
-                        .simultaneously(
-                            with: TapGesture(count: 2)
-                                .onEnded {
-                                    selectedFileId = file.id
-                                    if file.itemType == .DIRECTORY {
-                                        viewModel.enterDirectory(dir: file)
-                                        selectedFileId = nil
-                                    } else {
-                                        NSWorkspace.shared.open(file.url)
-                                    }
-                                }
-                        )
+                    },
+                    onCopy: {
+                        viewModel.copyElement(element: file)
+                    },
+                    onCut: {
+                        viewModel.cutElement(element: file)
+                    },
+                    onOpenAsDirectory: {
+                        viewModel.enterDirectory(dir: file)
+                        selectedFileId = nil
+                    }
                 )
-                .contextMenu {
-                    Button("Copy Element") { viewModel.copyElement(element: file) }
-                    
-                    Button("Cut Element") { viewModel.cutElement(element: file) }
-                    
-                    Divider()
-                    
-                    Button(action: {
-                        let pasteboard = NSPasteboard.general
-                        pasteboard.clearContents()
-                        pasteboard.setString(file.url.path, forType: .string)
-                    }) {
-                        Text("Copy Full Path")
-                        Image(systemName: "doc.on.doc")
-                    }
-                    
-                    Divider()
-                    
-                    Button(action: {
-                        do {
-                            try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
-                        } catch {
-                            print("Error while moving item to trash \(error.localizedDescription)")
-                        }
-                    }) {
-                        Text("Move to Trash")
-                        Image(systemName: "trash")
-                    }
-                }
             }
         }
     }
@@ -188,7 +144,9 @@ struct ContentView: View {
                             selectedFileId = file.id
                         },
                         onDoubleTap: {
-                            if file.itemType == .DIRECTORY {
+                            if file.url.pathExtension == "app" {
+                                NSWorkspace.shared.open(file.url)
+                            } else if file.itemType == .DIRECTORY {
                                 viewModel.enterDirectory(dir: file)
                                 selectedFileId = nil
                             } else {
@@ -200,6 +158,10 @@ struct ContentView: View {
                         },
                         onCut: {
                             viewModel.cutElement(element: file)
+                        },
+                        onOpenAsDirectory: {
+                            viewModel.enterDirectory(dir: file)
+                            selectedFileId = nil
                         }
                     )
                 }
