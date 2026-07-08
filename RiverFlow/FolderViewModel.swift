@@ -27,7 +27,7 @@ class FolderViewModel {
     
     func loadCurrentDirectory() {
         do {
-            let dataKeys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
+            let dataKeys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey, .isHiddenKey]
             
             let options: FileManager.DirectoryEnumerationOptions = showHiddenFiles ? [] : .skipsHiddenFiles
             
@@ -45,12 +45,18 @@ class FolderViewModel {
                 let modifDate = resourceValues?.contentModificationDate
                 let finalSize = isDir ? nil : (fileSize != nil ? Int64(fileSize!) : nil)
                 
-                return FileItem(
+                let isHiddenAttribute = resourceValues?.isHidden ?? false
+                let startsWithDot = url.lastPathComponent.hasPrefix(".")
+                let isElementHidden = isHiddenAttribute || startsWithDot
+                
+                return FileItem (
                     url: url,
                     name: url.lastPathComponent,
                     itemType: isDir ? .DIRECTORY : .FILE,
                     size: finalSize,
-                    modificationDate: modifDate)
+                    modificationDate: modifDate,
+                    isHidden: isElementHidden
+                )
             }
 //            .sorted {
 //                if $0.itemType == .DIRECTORY && $1.itemType == .FILE { return true }

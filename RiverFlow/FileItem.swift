@@ -7,6 +7,7 @@ struct FileItem: Identifiable {
     let itemType: FileItemType
     let size: Int64?
     let modificationDate: Date?
+    let isHidden: Bool
     
     // i hate computed properties i hate computed properties i hate computed properties
     var formattedSize: String {

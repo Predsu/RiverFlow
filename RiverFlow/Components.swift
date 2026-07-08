@@ -44,33 +44,52 @@ struct FileIconView: View {
         return NSWorkspace.shared.icon(forFile: file.url.path)
     }
     
+    final class IconCache {
+        static let shared = IconCache()
+        private var cache: [String: NSImage] = [:]
+        
+        func icon(for path: String) -> NSImage {
+            if let cached = cache[path] { return cached }
+            let icon = NSWorkspace.shared.icon(forFile: path)
+            cache[path] = icon
+            return icon
+        }
+    }
+    
     var body: some View {
-        if isAppBundle {
-            Image(nsImage: appIcon)
-                .resizable()
-                .scaledToFit()
-                .frame(width: baseSize, height: baseSize)
-        } else if file.itemType == .DIRECTORY {
-            Image(systemName: "folder")
-                .font(.system(size: baseSize))
-                .foregroundColor(.blue)
-        } else {
-            ZStack(alignment: .bottom) {
-                Image(systemName: "doc")
+        Group {
+            if isAppBundle {
+                Image(nsImage: appIcon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: baseSize, height: baseSize)
+                    .opacity(file.isHidden ? 0.5 : 1.0)
+            } else if file.itemType == .DIRECTORY {
+                Image(systemName: "folder")
                     .font(.system(size: baseSize))
-                    .foregroundColor(.secondary)
-                
-                if !file.fileExtensionIconText.isEmpty {
-                    Text(file.fileExtensionIconText)
-                        .font(.system(size: baseSize * 0.18, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 2)
-                        .padding(.bottom, baseSize * 0.22)
-                        .lineLimit(1)
-                        .allowsHitTesting(false)
+                    .foregroundColor(.blue)
+                    .opacity(file.isHidden ? 0.5 : 1.0)
+            } else {
+                ZStack(alignment: .bottom) {
+                    Image(systemName: "doc")
+                        .font(.system(size: baseSize))
+                        .foregroundColor(.secondary)
+                        .opacity(file.isHidden ? 0.5 : 1.0)
+                    
+                    if !file.fileExtensionIconText.isEmpty {
+                        Text(file.fileExtensionIconText)
+                            .font(.system(size: baseSize * 0.18, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 2)
+                            .padding(.bottom, baseSize * 0.22)
+                            .lineLimit(1)
+                            .allowsHitTesting(false)
+                            .frame(width: baseSize * 0.75)
+                    }
                 }
             }
         }
+        .frame(width: baseSize, height: baseSize)
     }
 }
 
@@ -85,15 +104,15 @@ struct FileGridItemView: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            FileIconView(file: file, baseSize: 48)
+            FileIconView(file: file, baseSize: 64)
             Text(file.name)
                 .font(.system(size: 12))
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
-                .frame(alignment: .top)
+                .frame(height: 32, alignment: .top)
         }
         .padding(10)
-        .frame(width: 120, height: 110)
+        .frame(width: 120, height: 110, alignment: .top)
         .background(isSelected ? Color(.selectedControlColor).opacity(0.15) : Color.clear)
         .cornerRadius(8)
         .overlay(
