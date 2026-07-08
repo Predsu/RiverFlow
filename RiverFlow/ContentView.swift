@@ -7,6 +7,9 @@ struct ContentView: View {
     @State private var selectedSideBarItem: SideBarItem? = .home
     @State private var selectedElementsViewStyle: ElementsViewStyle = .grid
     
+    // Stan przechowujący ID aktualnie zaznaczonego pliku/folderu
+    @State private var selectedFileId: UUID? = nil
+    
     let gridCols = [
         GridItem(.adaptive(minimum: 130), spacing: 16)
     ]
@@ -26,7 +29,7 @@ struct ContentView: View {
                     List {
                         ForEach(viewModel.files) { file in
                             HStack {
-                                FileIconView(file: file, baseSize: 64)
+                                FileIconView(file: file, baseSize: 18) // mniejszy rozmiar ikony dopasowany do listy
                                 Text(file.name)
                                     .lineLimit(1)
                                 
@@ -42,15 +45,34 @@ struct ContentView: View {
                                     .foregroundColor(.secondary)
                                     .frame(width: 80, alignment: .trailing)
                             }
-                            .padding(.vertical, 2)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 6)
+                            // Subtelne tło i outline dla zaznaczonego wiersza listy
+                            .background(selectedFileId == file.id ? Color(.selectedControlColor).opacity(0.2) : Color.clear)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(Color(.selectedControlColor), lineWidth: selectedFileId == file.id ? 1.5 : 0)
+                            )
                             .contentShape(Rectangle())
-                            .onTapGesture(count: 2) {
-                                if file.itemType == .DIRECTORY {
-                                    viewModel.enterDirectory(dir: file)
-                                } else {
-                                    NSWorkspace.shared.open(file.url)
-                                }
-                            }
+                            // Zintegrowana, równoległa obsługa kliknięć na liście zapobiegająca zatorom
+                            .gesture(
+                                TapGesture(count: 1)
+                                    .onEnded {
+                                        selectedFileId = file.id
+                                    }
+                                    .simultaneously(
+                                        with: TapGesture(count: 2)
+                                            .onEnded {
+                                                selectedFileId = file.id
+                                                if file.itemType == .DIRECTORY {
+                                                    viewModel.enterDirectory(dir: file)
+                                                    selectedFileId = nil
+                                                } else {
+                                                    NSWorkspace.shared.open(file.url)
+                                                }
+                                            }
+                                    )
+                            )
                             .contextMenu {
                                 Button(action: {
                                     let pasteboard = NSPasteboard.general
@@ -80,20 +102,49 @@ struct ContentView: View {
                     ScrollView {
                         LazyVGrid(columns: gridCols, spacing: 16) {
                             ForEach(viewModel.files) { file in
-                                FileGridItemView(file: file) {
-                                    if file.itemType == .DIRECTORY {
-                                        viewModel.enterDirectory(dir: file)
-                                    } else {
-                                        NSWorkspace.shared.open(file.url)
+                                FileGridItemView(
+                                    file: file,
+                                    isSelected: selectedFileId == file.id,
+                                    onTap: {
+                                        selectedFileId = file.id
+                                    },
+                                    onDoubleTap: {
+                                        if file.itemType == .DIRECTORY {
+                                            viewModel.enterDirectory(dir: file)
+                                            selectedFileId = nil
+                                        } else {
+                                            NSWorkspace.shared.open(file.url)
+                                        }
                                     }
-                                }
+                                )
                             }
                         }
                         .padding()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background()
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .contentShape(Rectangle())
+                    // Kliknięcie w puste tło siatki odznacza aktualnie wybrany element
+                    .onTapGesture {
+                        selectedFileId = nil
+                    }
                     .contextMenu {
+                        Button(action: {
+                            viewModel.createNewDirectory()
+                        }) {
+                            Text("Create Folder")
+                            Image(systemName: "folder.badge.plus")
+                        }
+                        
+                        Button(action: {
+                            viewModel.createNewFile()
+                        }) {
+                            Text("Create File")
+                            Image(systemName: "doc.badge.plus")
+                        }
+                        
+                        Divider()
+                        
                         Button(action: {
                             let pasteboard = NSPasteboard.general
                             pasteboard.clearContents()
@@ -144,6 +195,7 @@ struct ContentView: View {
             }
         }
         .onChange(of: selectedSideBarItem) { _, newValue in
+            selectedFileId = nil // resetujemy zaznaczenie przy przełączaniu zakładek w SideBarze
             if let newSection = newValue {
                 viewModel.currentDir = newSection.url
                 viewModel.loadCurrentDirectory()
