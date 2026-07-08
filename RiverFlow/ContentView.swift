@@ -2,248 +2,13 @@ import SwiftUI
 import Foundation
 import Observation
 
-enum FileItemType {
-    case FILE
-    case DIRECTORY
-}
-
-// what is this monstrosity
-enum SideBarItem: String, CaseIterable, Identifiable {
-    case home = "Home"
-    case desktop = "Desktop"
-    case documents = "Documents"
-    case downloads = "Downloads"
-    
-    var id: String { self.rawValue }
-    
-    var url: URL {
-        switch self {
-        case .home:
-            return URL(fileURLWithPath: NSHomeDirectory())
-        case .desktop:
-            return FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
-        case .documents:
-            return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        case .downloads:
-            return FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
-        }
-    }
-    
-    var iconName: String {
-        switch self {
-        case .home: return "house"
-        case .desktop: return "menubar.dock.rectangle"
-        case .documents: return "doc.text"
-        case .downloads: return "arrow.down.circle"
-        }
-    }
-}
-
-// ngl i'm starting to like these
-enum ElementsViewStyle: String, CaseIterable, Identifiable {
-    case list = "List"
-    case grid = "Grid"
-    
-    var id: String { self.rawValue }
-    
-    var iconName: String {
-        switch self {
-        case .list: return "list.bullet"
-        case .grid: return "square.grid.3x3"
-        }
-    }
-}
-
-struct FileItem: Identifiable {
-    let id = UUID()
-    let url: URL
-    let name: String
-    let itemType: FileItemType
-    let size: Int64?
-    let modificationDate: Date?
-    
-    // i hate computed properties i hate computed properties i hate computed properties
-    var formattedSize: String {
-        guard let size = size else { return "--" }
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useAll]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: size)
-    }
-    
-    // i love computed properties i love computed properties i love computed properties
-    var formattedDate: String {
-        guard let date = modificationDate else { return "--" }
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .medium
-        return formatter.string(from: date)
-    }
-}
-
-@Observable
-class FolderViewModel {
-    var currentDir: URL
-    var files: [FileItem] = []
-    
-    var currentDirName: String {
-        return currentDir.path == "/" ? "/" : currentDir.lastPathComponent
-    }
-    
-    init(startDir: URL = URL(fileURLWithPath: NSHomeDirectory())) {
-        self.currentDir = startDir
-        loadCurrentDirectory()
-    }
-    
-    func loadCurrentDirectory() {
-        do {
-            let dataKeys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
-            let content = try FileManager.default.contentsOfDirectory(
-                at: currentDir,
-                includingPropertiesForKeys: dataKeys
-            )
-            
-            self.files = content.map { url in
-                let resourceValues = try? url.resourceValues(forKeys: Set(dataKeys))
-                
-                let isDir = resourceValues?.isDirectory ?? false
-                let fileSize = resourceValues?.fileSize
-                let modifDate = resourceValues?.contentModificationDate
-                let finalSize = isDir ? nil : (fileSize != nil ? Int64(fileSize!) : nil)
-                
-                return FileItem(
-                    url: url,
-                    name: url.lastPathComponent,
-                    itemType: isDir ? .DIRECTORY : .FILE,
-                    size: finalSize,
-                    modificationDate: modifDate)
-            }
-            .sorted {
-                if $0.itemType == .DIRECTORY && $1.itemType == .FILE { return true }
-                if $0.itemType == .FILE && $1.itemType == .DIRECTORY { return false }
-                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
-            }
-            
-        } catch {
-            print("Error while reading directory \(error.localizedDescription)")
-            self.files = []
-        }
-    }
-    
-    func enterDirectory(dir: FileItem) {
-        guard dir.itemType == .DIRECTORY else { return }
-        currentDir = dir.url
-        loadCurrentDirectory()
-    }
-    
-    func goToParentDirectory() {
-        let parentDir = currentDir.deletingLastPathComponent()
-        if parentDir != currentDir {
-            currentDir = parentDir
-            loadCurrentDirectory()
-        }
-    }
-}
-
-struct FileGridItemView: View {
-    let file: FileItem
-    let onDoubleTap: () -> Void
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: file.itemType == .DIRECTORY ? "folder" : "doc")
-                .font(.system(size: 42))
-                .foregroundColor(file.itemType == .DIRECTORY ? .blue : .secondary)
-            Text(file.name)
-                .font(.caption)
-                .lineLimit(1)
-                .multilineTextAlignment(.center)
-                .frame(height: 32, alignment: .top)
-        }
-        .padding(8)
-        .frame(width: 128)
-        .background(Color.clear)
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            onDoubleTap()
-        }
-        .contextMenu {
-            Button("Copy Full Path") {
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(file.url.path, forType: .string)
-            }
-        }
-    }
-}
-
-struct InteractivePathTitleView: View {
-    let fullPath: String
-    let folderName: String
-    
-    @State private var isHoveringPath = false
-    @State private var showCopyFeedback = false
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            if isHoveringPath {
-                Text(fullPath)
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.head)
-                    // Płynne wejście/wyjście samej ścieżki
-                    .transition(.asymmetric(insertion: .opacity.animation(.easeInOut(duration: 0.2)),
-                                            removal: .identity))
-            } else {
-                Text(folderName)
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                    .transition(.identity)
-            }
-            
-            if isHoveringPath {
-                Image(systemName: showCopyFeedback ? "checkmark.circle.fill" : "doc.on.doc")
-                    .font(.caption)
-                    .foregroundColor(showCopyFeedback ? .green : .secondary)
-                    .transition(.opacity)
-            }
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 8)
-        .background(isHoveringPath ? Color(NSColor.quaternaryLabelColor) : Color.clear)
-        .cornerRadius(4)
-        .frame(minWidth: 140, maxWidth: 320, alignment: .leading)
-        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isHoveringPath)
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
-                isHoveringPath = hovering
-            }
-        }
-        .onTapGesture {
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(fullPath, forType: .string)
-            
-            withAnimation(.easeInOut(duration: 0.15)) {
-                showCopyFeedback = true
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    showCopyFeedback = false
-                }
-            }
-        }
-    }
-}
-
 struct ContentView: View {
     @State private var viewModel = FolderViewModel()
     @State private var selectedSideBarItem: SideBarItem? = .home
-    @State private var selectedElementsViewStyle: ElementsViewStyle = .list
+    @State private var selectedElementsViewStyle: ElementsViewStyle = .grid
+    
+    // Stan przechowujący ID aktualnie zaznaczonego pliku/folderu
+    @State private var selectedFileId: UUID? = nil
     
     let gridCols = [
         GridItem(.adaptive(minimum: 130), spacing: 16)
@@ -264,8 +29,7 @@ struct ContentView: View {
                     List {
                         ForEach(viewModel.files) { file in
                             HStack {
-                                Image(systemName: file.itemType == .DIRECTORY ? "folder" : "doc")
-                                    .foregroundColor(file.itemType == .DIRECTORY ? .blue : .secondary)
+                                FileIconView(file: file, baseSize: 18) // mniejszy rozmiar ikony dopasowany do listy
                                 Text(file.name)
                                     .lineLimit(1)
                                 
@@ -281,15 +45,34 @@ struct ContentView: View {
                                     .foregroundColor(.secondary)
                                     .frame(width: 80, alignment: .trailing)
                             }
-                            .padding(.vertical, 2)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 6)
+                            // Subtelne tło i outline dla zaznaczonego wiersza listy
+                            .background(selectedFileId == file.id ? Color(.selectedControlColor).opacity(0.2) : Color.clear)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(Color(.selectedControlColor), lineWidth: selectedFileId == file.id ? 1.5 : 0)
+                            )
                             .contentShape(Rectangle())
-                            .onTapGesture(count: 2) {
-                                if file.itemType == .DIRECTORY {
-                                    viewModel.enterDirectory(dir: file)
-                                } else {
-                                    NSWorkspace.shared.open(file.url)
-                                }
-                            }
+                            // Zintegrowana, równoległa obsługa kliknięć na liście zapobiegająca zatorom
+                            .gesture(
+                                TapGesture(count: 1)
+                                    .onEnded {
+                                        selectedFileId = file.id
+                                    }
+                                    .simultaneously(
+                                        with: TapGesture(count: 2)
+                                            .onEnded {
+                                                selectedFileId = file.id
+                                                if file.itemType == .DIRECTORY {
+                                                    viewModel.enterDirectory(dir: file)
+                                                    selectedFileId = nil
+                                                } else {
+                                                    NSWorkspace.shared.open(file.url)
+                                                }
+                                            }
+                                    )
+                            )
                             .contextMenu {
                                 Button(action: {
                                     let pasteboard = NSPasteboard.general
@@ -319,17 +102,57 @@ struct ContentView: View {
                     ScrollView {
                         LazyVGrid(columns: gridCols, spacing: 16) {
                             ForEach(viewModel.files) { file in
-                                FileGridItemView(file: file) {
-                                    if file.itemType == .DIRECTORY {
-                                        viewModel.enterDirectory(dir: file)
-                                    } else {
-                                        NSWorkspace.shared.open(file.url)
+                                FileGridItemView(
+                                    file: file,
+                                    isSelected: selectedFileId == file.id,
+                                    onTap: {
+                                        selectedFileId = file.id
+                                    },
+                                    onDoubleTap: {
+                                        if file.itemType == .DIRECTORY {
+                                            viewModel.enterDirectory(dir: file)
+                                            selectedFileId = nil
+                                        } else {
+                                            NSWorkspace.shared.open(file.url)
+                                        }
                                     }
-                                }
+                                )
                             }
                         }
                         .padding()
-                        .background()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .contentShape(Rectangle())
+                    // Kliknięcie w puste tło siatki odznacza aktualnie wybrany element
+                    .onTapGesture {
+                        selectedFileId = nil
+                    }
+                    .contextMenu {
+                        Button(action: {
+                            viewModel.createNewDirectory()
+                        }) {
+                            Text("Create Folder")
+                            Image(systemName: "folder.badge.plus")
+                        }
+                        
+                        Button(action: {
+                            viewModel.createNewFile()
+                        }) {
+                            Text("Create File")
+                            Image(systemName: "doc.badge.plus")
+                        }
+                        
+                        Divider()
+                        
+                        Button(action: {
+                            let pasteboard = NSPasteboard.general
+                            pasteboard.clearContents()
+                            pasteboard.setString(viewModel.currentDir.path, forType: .string)
+                        }) {
+                            Text("Copy Current Directory Path")
+                            Image(systemName: "doc.on.doc")
+                        }
                     }
                 }
             }
@@ -355,6 +178,12 @@ struct ContentView: View {
                 }
                 
                 ToolbarItem(placement: .primaryAction) {
+                    Toggle(isOn: $viewModel.showHiddenFiles) {
+                        Label("Show Hidden", systemImage: viewModel.showHiddenFiles ? "eye" : "eye.slash")
+                    }
+                }
+                
+                ToolbarItem(placement: .primaryAction) {
                     Picker("View Style", selection: $selectedElementsViewStyle) {
                         ForEach(ElementsViewStyle.allCases) { style in
                             Label(style.rawValue, systemImage: style.iconName)
@@ -366,6 +195,7 @@ struct ContentView: View {
             }
         }
         .onChange(of: selectedSideBarItem) { _, newValue in
+            selectedFileId = nil // resetujemy zaznaczenie przy przełączaniu zakładek w SideBarze
             if let newSection = newValue {
                 viewModel.currentDir = newSection.url
                 viewModel.loadCurrentDirectory()
