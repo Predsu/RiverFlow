@@ -188,6 +188,10 @@ class ThumbnailManager {
             }
         }
     }
+    
+    func clearCache() {
+        cache.removeAllObjects()
+    }
 }
 
 struct FileIconView: View {
