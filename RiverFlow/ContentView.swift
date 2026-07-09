@@ -145,6 +145,9 @@ struct ContentView: View {
                     onOpenAsDirectory: {
                         viewModel.enterDirectory(dir: file)
                         selectedFileId = nil
+                    },
+                    onRefreshRequired: {
+                        viewModel.loadCurrentDirectory()
                     }
                 )
             }
@@ -180,6 +183,9 @@ struct ContentView: View {
                         onOpenAsDirectory: {
                             viewModel.enterDirectory(dir: file)
                             selectedFileId = nil
+                        },
+                        onRefreshRequired: {
+                            viewModel.loadCurrentDirectory()
                         }
                     )
                 }
