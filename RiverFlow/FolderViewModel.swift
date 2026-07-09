@@ -16,6 +16,10 @@ class FolderViewModel {
         }
     }
     
+    var matchingSidebarItem: SideBarItem? {
+        return SideBarItem.allCases.first { $0.url.standardizedFileURL == currentDir.standardizedFileURL }
+    }
+    
     var currentDirName: String {
         return currentDir.path == "/" ? "/" : currentDir.lastPathComponent
     }

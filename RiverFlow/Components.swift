@@ -64,7 +64,7 @@ struct FileInfoView: View {
                 }
                 
                 HStack {
-                    Text("Modification Date:")
+                    Text("Modified:")
                         .foregroundColor(.secondary)
                         .frame(width: 80, alignment: .leading)
                     Text(file.formattedDate)

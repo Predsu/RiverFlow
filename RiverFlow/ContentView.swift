@@ -225,6 +225,21 @@ struct ContentView: View {
                 Image(systemName: "doc.on.doc")
             }
         }
+        .onChange(of: selectedSideBarItem) { _, newValue in
+            if let newSection = newValue {
+                if viewModel.currentDir.standardizedFileURL != newSection.url.standardizedFileURL {
+                    selectedFileId = nil
+                    viewModel.currentDir = newSection.url
+                    viewModel.loadCurrentDirectory()
+                }
+            }
+        }
+        .onChange(of: viewModel.currentDir) { _, newValue in
+            let matchingItem = viewModel.matchingSidebarItem
+            if selectedSideBarItem != matchingItem {
+                selectedSideBarItem = matchingItem
+            }
+        }
     }
 }
 
