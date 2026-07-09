@@ -37,6 +37,8 @@ struct FileInfoView: View {
     let file: FileItem
     weak var window: NSWindow?
     
+    @State private var displaySize: String = ""
+    
     var body: some View {
         VStack(spacing: 16) {
             HStack(alignment: .top, spacing: 16) {
@@ -60,8 +62,8 @@ struct FileInfoView: View {
                     Text("Size:")
                         .foregroundColor(.secondary)
                         .frame(width: 80, alignment: .leading)
-                    Text(file.formattedSize)
-                        .textSelection(.enabled)
+                    Text(displaySize)
+                        .fontWeight(.medium)
                 }
                 
                 HStack {
@@ -99,6 +101,54 @@ struct FileInfoView: View {
         }
         .padding(20)
         .frame(width: 380, height: 260)
+        .onAppear {
+            if file.itemType == .DIRECTORY {
+                displaySize = "Calculating..."
+                Task(priority: .userInitiated) {
+                    let size = await calculateFolderSize(at: file.url)
+                    displaySize = formatBytes(size)
+                }
+            } else {
+                displaySize = file.formattedSize
+            }
+        }
+    }
+    
+    private func calculateFolderSize(at url: URL) async -> Int64 {
+        let fileManager = FileManager.default
+        var totalSize: Int64 = 0
+        
+        let keys: [URLResourceKey] = [.fileSizeKey, .isDirectoryKey]
+        
+        guard let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants],
+            errorHandler: { (url, error) -> Bool in
+                print("Error at \(url.path): \(error.localizedDescription)")
+                return true
+            }
+        ) else { return 0 }
+        
+        for case let fileURL as URL in enumerator {
+            if Task.isCancelled { return totalSize }
+            
+            guard let resourceValues = try? fileURL.resourceValues(forKeys: Set(keys)) else { continue }
+            
+            if let isDir = resourceValues.isDirectory, !isDir {
+                if let size = resourceValues.fileSize {
+                    totalSize += Int64(size)
+                }
+            }
+        }
+        return totalSize
+    }
+    
+    private func formatBytes(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useAll]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
     }
 }
 
@@ -350,6 +400,7 @@ struct FileGridItemView: View {
     let onCopy: () -> Void
     let onCut: () -> Void
     let onOpenAsDirectory: () -> Void
+    let onRefreshRequired: () -> Void
     
     var body: some View {
         VStack(spacing: 8) {
@@ -427,9 +478,11 @@ struct FileGridItemView: View {
             Button(action: {
                 do {
                     try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
+                    onRefreshRequired()
                 } catch {
                     print("Error while moving element to trash \(error.localizedDescription)")
                 }
+                
             }) {
                 Text("Move to Trash")
                 Image(systemName: "trash")
@@ -448,6 +501,7 @@ struct FileListItemView: View {
     let onCopy: () -> Void
     let onCut: () -> Void
     let onOpenAsDirectory: () -> Void
+    let onRefreshRequired: () -> Void
 
     var body: some View {
         HStack {
@@ -514,7 +568,7 @@ struct FileListItemView: View {
                 pasteboard.clearContents()
                 pasteboard.setString(file.url.path, forType: .string)
             }) {
-                Text("Copy Full Path")
+                Text("Copy Element Path")
                 Image(systemName: "doc.on.doc")
             }
 
@@ -523,6 +577,7 @@ struct FileListItemView: View {
             Button(action: {
                 do {
                     try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
+                    onRefreshRequired()
                 } catch {
                     print("Error while moving item to trash \(error.localizedDescription)")
                 }
