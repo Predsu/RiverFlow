@@ -7,6 +7,7 @@ enum FileItemType {
 
 // what is this monstrosity
 enum SideBarItem: String, CaseIterable, Identifiable {
+    case mac = "This Mac"
     case home = "Home"
     case desktop = "Desktop"
     case documents = "Documents"
@@ -17,6 +18,8 @@ enum SideBarItem: String, CaseIterable, Identifiable {
     
     var url: URL {
         switch self {
+        case .mac:
+            return URL(fileURLWithPath: "/")
         case .home:
             return URL(fileURLWithPath: NSHomeDirectory())
         case .desktop:
@@ -32,6 +35,7 @@ enum SideBarItem: String, CaseIterable, Identifiable {
     
     var iconName: String {
         switch self {
+        case .mac: return "apple.logo"
         case .home: return "house"
         case .desktop: return "menubar.dock.rectangle"
         case .documents: return "doc.text"
