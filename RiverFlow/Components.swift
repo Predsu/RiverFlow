@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import QuickLookThumbnailing
 
 struct RightClickCatcher: NSViewRepresentable {
     let onRightClick: () -> Void
@@ -145,12 +146,64 @@ class FileWindowManager: NSObject, NSWindowDelegate {
     }
 }
 
+class ThumbnailManager {
+    static let shared = ThumbnailManager()
+    private let cache = NSCache<NSURL, NSImage>()
+    
+    init() {
+        cache.countLimit = 35
+        cache.evictsObjectsWithDiscardedContent = true
+    }
+    
+    func getElementThumbnail(for url: URL, size: CGFloat, completion: @escaping (NSImage?) -> Void) {
+        let nsURL = url as NSURL
+        
+        if let cachedImage = cache.object(forKey: nsURL) {
+            completion(cachedImage)
+            return
+        }
+        
+        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+        let request = QLThumbnailGenerator.Request(
+            fileAt: url,
+            size: CGSize(
+                width: size,
+                height: size
+            ),
+            scale: scale,
+            representationTypes: .thumbnail
+        )
+        
+        QLThumbnailGenerator.shared.generateRepresentations(for: request) { representation, type, error in
+            if let thumbnail = representation {
+                let nsImage = thumbnail.nsImage
+                self.cache.setObject(nsImage, forKey: nsURL)
+                DispatchQueue.main.async {
+                    completion(nsImage)
+                }
+            } else {
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+            }
+        }
+    }
+}
+
 struct FileIconView: View {
     let file: FileItem
     var baseSize: CGFloat = 64
     
+    @State private var loadedThumbnail: NSImage? = nil
+    @State private var hasAttemptedLoad: Bool = false
+    
     private var isAppBundle: Bool {
         return file.url.pathExtension.lowercased() == "app"
+    }
+    
+    private var isImageFile: Bool {
+        let imageExtensions = ["jpg", "png", "jpeg", "gif", "bmp", "tiff", "heic", "webp"]
+        return imageExtensions.contains(file.url.pathExtension.lowercased())
     }
     
     private var appIcon: NSImage {
@@ -177,6 +230,22 @@ struct FileIconView: View {
                     .scaledToFit()
                     .frame(width: baseSize, height: baseSize)
                     .opacity(file.isHidden ? 0.5 : 1.0)
+            } else if isImageFile {
+                if let img = loadedThumbnail {
+                    Image(nsImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .cornerRadius(4)
+                        .opacity(file.isHidden ? 0.5 : 1.0)
+                } else {
+                    Image(systemName: "photo")
+                        .font(.system(size: baseSize))
+                        .foregroundColor(.secondary)
+                        .opacity(file.isHidden ? 0.5 : 1.0)
+                        .onAppear {
+                            loadThumbnailImage()
+                        }
+                }
             } else if file.itemType == .DIRECTORY {
                 Image(systemName: "folder")
                     .font(.system(size: baseSize))
@@ -203,6 +272,22 @@ struct FileIconView: View {
             }
         }
         .frame(width: baseSize, height: baseSize)
+        .onChange(of: file.url) { _, _ in
+            loadedThumbnail = nil
+            hasAttemptedLoad = false
+            if isImageFile {
+                loadThumbnailImage()
+            }
+        }
+    }
+    
+    private func loadThumbnailImage() {
+        guard !hasAttemptedLoad else { return }
+        hasAttemptedLoad = true
+        
+        ThumbnailManager.shared.getElementThumbnail(for: file.url, size: baseSize) { img in
+            self.loadedThumbnail = img
+        }
     }
 }
 
