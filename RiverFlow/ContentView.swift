@@ -92,13 +92,27 @@ struct ContentView: View {
             }
             
             ToolbarItem(placement: .primaryAction) {
+                Picker("Sort By", selection: $viewModel.currentSortingOption) {
+                    ForEach(FileSortOption.allCases) { option in
+                        Label(option.rawValue, systemImage: option.iconName)
+                            .tag(option)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 64)
+                .help("Sort Options")
+            }
+            
+            ToolbarItem(placement: .primaryAction) {
                 Picker("View Style", selection: $selectedElementsViewStyle) {
                     ForEach(ElementsViewStyle.allCases) { style in
                         Label(style.rawValue, systemImage: style.iconName)
                             .tag(style)
                     }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
+                .frame(width: 64)
+                .help("View Options")
             }
         }
         .onCommand(#selector(NSText.copy(_:))) {
@@ -118,7 +132,7 @@ struct ContentView: View {
 
     private var listView: some View {
         List {
-            ForEach(viewModel.files) { file in
+            ForEach(viewModel.sortedFiles) { file in
                 FileListItemView(
                     file: file,
                     isSelected: selectedFileId == file.id,
@@ -157,7 +171,7 @@ struct ContentView: View {
     private var gridView: some View {
         ScrollView {
             LazyVGrid(columns: gridCols, spacing: 16) {
-                ForEach(viewModel.files) { file in
+                ForEach(viewModel.sortedFiles) { file in
                     FileGridItemView(
                         file: file,
                         isSelected: selectedFileId == file.id,
