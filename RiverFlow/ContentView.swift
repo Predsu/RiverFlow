@@ -7,6 +7,8 @@ struct ContentView: View {
     @State private var selectedSideBarItem: SideBarItem? = .home
     @State private var selectedElementsViewStyle: ElementsViewStyle = .grid
     @State private var selectedFileId: UUID? = nil
+    @State private var refreshTrigger = 0
+    @State private var goUpTrigger = 0
     
     let gridCols = [
         GridItem(.adaptive(minimum: 130), spacing: 16)
@@ -50,14 +52,29 @@ struct ContentView: View {
         .navigationTitle("")
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
-                Button(action: { viewModel.goToParentDirectory() }) {
+                Button(action: {
+                    viewModel.goToParentDirectory()
+                    goUpTrigger += 1
+                }) {
                     Image(systemName: "arrow.up")
+                        .symbolEffect(.bounce.byLayer, options: .speed(8), value: goUpTrigger)
                 }
                 .disabled(viewModel.currentDir.path == "/")
+                .help("Go To Parent Directory")
                 
-                Button(action: { viewModel.loadCurrentDirectory() }) {
-                    Image(systemName: "arrow.clockwise")
+                Button(action: {
+                    viewModel.loadCurrentDirectory()
+                    refreshTrigger += 1
+                }) {
+                    if #available(macOS 15.0, *) {
+                        Image(systemName: "arrow.clockwise")
+                            .symbolEffect(.rotate, options: .speed(16), value: refreshTrigger)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .symbolEffect(.bounce.byLayer, value: refreshTrigger)
+                    }
                 }
+                .help("Refresh")
             }
             
             ToolbarItem(placement: .navigation) {
@@ -71,6 +88,7 @@ struct ContentView: View {
                 Toggle(isOn: $viewModel.showHiddenFiles) {
                     Label("Show Hidden", systemImage: viewModel.showHiddenFiles ? "eye" : "eye.slash")
                 }
+                .help(viewModel.showHiddenFiles ? "Hide Hidden" : "Show Hidden")
             }
             
             ToolbarItem(placement: .primaryAction) {
@@ -205,6 +223,21 @@ struct ContentView: View {
             }) {
                 Text("Copy Current Directory Path")
                 Image(systemName: "doc.on.doc")
+            }
+        }
+        .onChange(of: selectedSideBarItem) { _, newValue in
+            if let newSection = newValue {
+                if viewModel.currentDir.standardizedFileURL != newSection.url.standardizedFileURL {
+                    selectedFileId = nil
+                    viewModel.currentDir = newSection.url
+                    viewModel.loadCurrentDirectory()
+                }
+            }
+        }
+        .onChange(of: viewModel.currentDir) { _, newValue in
+            let matchingItem = viewModel.matchingSidebarItem
+            if selectedSideBarItem != matchingItem {
+                selectedSideBarItem = matchingItem
             }
         }
     }
