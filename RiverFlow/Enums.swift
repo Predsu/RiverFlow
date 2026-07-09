@@ -59,3 +59,19 @@ enum ElementsViewStyle: String, CaseIterable, Identifiable {
         }
     }
 }
+
+enum FileSortOption: String, CaseIterable, Identifiable {
+    case name = "Name"
+    case size = "Size"
+    case modificationDate = "Modification Date"
+    
+    var id: String { self.rawValue }
+    
+    var iconName: String {
+        switch self {
+        case .name: return "textformat"
+        case .size: return "gauge.with.dots.needle.bottom.0percent"
+        case .modificationDate: return "calendar"
+        }
+    }
+}

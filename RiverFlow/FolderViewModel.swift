@@ -6,6 +6,7 @@ import AppKit
 class FolderViewModel {
     var currentDir: URL
     var files: [FileItem] = []
+    var currentSortingOption: FileSortOption = .name
     
     var pasteboardURL: URL? = nil
     var isOperationCut: Bool = false
@@ -27,6 +28,28 @@ class FolderViewModel {
     init(startDir: URL = URL(fileURLWithPath: NSHomeDirectory())) {
         self.currentDir = startDir
         loadCurrentDirectory()
+    }
+    
+    var sortedFiles: [FileItem] {
+        switch currentSortingOption {
+        case .name:
+            return files.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .modificationDate:
+            return files.sorted {
+                let d1 = $0.modificationDate ?? Date.distantPast
+                let d2 = $1.modificationDate ?? Date.distantPast
+                return d1 > d2
+            }
+        case .size:
+            return files.sorted {
+                if let s1 = $0.size, let s2 = $1.size {
+                    return s1 > s2
+                }
+                if $0.size != nil { return true }
+                if $1.size != nil { return false }
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+        }
     }
     
     func loadCurrentDirectory() {
@@ -74,9 +97,11 @@ class FolderViewModel {
 //                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
 //            }
             
-            self.files = mappedFiles.sorted {
-                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
-            }
+//            self.files = mappedFiles.sorted {
+//                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+//            }
+            
+            self.files = mappedFiles
             
         } catch {
             print("Error while reading directory \(error.localizedDescription)")
