@@ -210,10 +210,52 @@ struct FileIconView: View {
         return imageExtensions.contains(file.url.pathExtension.lowercased())
     }
     
+//    private var isSpecialDirectory: Bool {
+//        guard file.itemType == .DIRECTORY else { return false }
+//        
+//        let path = file.url.path
+//        let homePath = NSHomeDirectory()
+//        
+//        let specialPaths = [
+//            homePath,
+//            "\(homePath)/Desktop",
+//            "\(homePath)/Downloads",
+//            "\(homePath)/Documents",
+//            "\(homePath)/Movies",
+//            "\(homePath)/Pictures",
+//            "/Applications",
+//            "/System/Applications"
+//        ]
+//        
+//        return specialPaths.contains(path)
+//    }
+    
+    private var specialFolderIconName: String? {
+        guard file.itemType == .DIRECTORY else { return nil }
+        let path = file.url.path
+        let homePath = NSHomeDirectory()
+        
+        switch path {
+        case homePath: return "house"
+        case "\(homePath)/Desktop": return "menubar.dock.rectangle"
+        case "\(homePath)/Downloads": return "arrow.down.circle"
+        case "\(homePath)/Documents": return "doc.text"
+        case "\(homePath)/Movies": return "film"
+        case "\(homePath)/Music": return "music.note"
+        case "\(homePath)/Pictures": return "photo.on.rectangle"
+        case "/Applications", "/System/Applications", "\(homePath)/Applications": return "square.3.layers.3d"
+        default: return nil
+        }
+    }
+    
     private var appIcon: NSImage {
         return NSWorkspace.shared.icon(forFile: file.url.path)
     }
     
+//    private var customIcon: NSImage {
+//        return IconCache.shared.icon(for: file.url.path)
+//    }
+
     final class IconCache {
         static let shared = IconCache()
         private var cache: [String: NSImage] = [:]
@@ -233,6 +275,11 @@ struct FileIconView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: baseSize, height: baseSize)
+                    .opacity(file.isHidden ? 0.5 : 1.0)
+            } else if let iconName = specialFolderIconName {
+                Image(systemName: iconName)
+                    .font(.system(size: baseSize))
+                    .foregroundColor(.blue)
                     .opacity(file.isHidden ? 0.5 : 1.0)
             } else if isImageFile {
                 if let img = loadedThumbnail {
