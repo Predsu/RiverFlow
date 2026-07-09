@@ -30,6 +30,8 @@ class FolderViewModel {
     }
     
     func loadCurrentDirectory() {
+        ThumbnailManager.shared.clearCache()
+        
         do {
             let dataKeys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey, .isHiddenKey]
             
@@ -41,26 +43,30 @@ class FolderViewModel {
                 options: options
             )
             
-            let mappedFiles = content.map { url in
-                let resourceValues = try? url.resourceValues(forKeys: Set(dataKeys))
-                
-                let isDir = resourceValues?.isDirectory ?? false
-                let fileSize = resourceValues?.fileSize
-                let modifDate = resourceValues?.contentModificationDate
-                let finalSize = isDir ? nil : (fileSize != nil ? Int64(fileSize!) : nil)
-                
-                let isHiddenAttribute = resourceValues?.isHidden ?? false
-                let startsWithDot = url.lastPathComponent.hasPrefix(".")
-                let isElementHidden = isHiddenAttribute || startsWithDot
-                
-                return FileItem (
-                    url: url,
-                    name: url.lastPathComponent,
-                    itemType: isDir ? .DIRECTORY : .FILE,
-                    size: finalSize,
-                    modificationDate: modifDate,
-                    isHidden: isElementHidden
-                )
+            let mappedFiles = autoreleasepool {
+                return content.map { url in
+                    let resourceValues = try? url.resourceValues(forKeys: Set(dataKeys))
+                    
+                    let isDir = resourceValues?.isDirectory ?? false
+                    let fileSize = resourceValues?.fileSize
+                    let modifDate = resourceValues?.contentModificationDate
+                    let finalSize = isDir ? nil : (fileSize != nil ? Int64(fileSize!) : nil)
+                    
+                    let isHiddenAttribute = resourceValues?.isHidden ?? false
+                    let startsWithDot = url.lastPathComponent.hasPrefix(".")
+                    let isElementHidden = isHiddenAttribute || startsWithDot
+                    
+                    
+                    
+                    return FileItem(
+                        url: url,
+                        name: url.lastPathComponent,
+                        itemType: isDir ? .DIRECTORY : .FILE,
+                        size: finalSize,
+                        modificationDate: modifDate,
+                        isHidden: isElementHidden
+                    )
+                }
             }
 //            .sorted {
 //                if $0.itemType == .DIRECTORY && $1.itemType == .FILE { return true }
