@@ -8,7 +8,7 @@ class FolderViewModel {
     var files: [FileItem] = []
     var currentSortingOption: FileSortOption = .name
     
-    var pasteboardURL: URL? = nil
+    var pasteboardURLs: [URL] = []
     var isOperationCut: Bool = false
     
     var showHiddenFiles: Bool = false {
@@ -77,7 +77,7 @@ class FolderViewModel {
                     
                     let isHiddenAttribute = resourceValues?.isHidden ?? false
                     let startsWithDot = url.lastPathComponent.hasPrefix(".")
-                    let isElementHidden = isHiddenAttribute || startsWithDot
+                    let isFileHidden = isHiddenAttribute || startsWithDot
                     
                     
                     
@@ -87,7 +87,7 @@ class FolderViewModel {
                         itemType: isDir ? .DIRECTORY : .FILE,
                         size: finalSize,
                         modificationDate: modifDate,
-                        isHidden: isElementHidden
+                        isHidden: isFileHidden
                     )
                 }
             }
@@ -170,61 +170,76 @@ class FolderViewModel {
         }
     }
     
-    func copyElement(element: FileItem) {
-        self.pasteboardURL = element.url
+    func copyFiles(files: [FileItem]) {
+        self.pasteboardURLs = files.map { $0.url }
         self.isOperationCut = false
         
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.writeObjects([element.url as NSURL])
+        pasteboard.writeObjects(files.map { $0.url as NSURL})
     }
     
-    func cutElement(element: FileItem) {
-        self.pasteboardURL = element.url
+    func cutFiles(files: [FileItem]) {
+        self.pasteboardURLs = files.map { $0.url }
         self.isOperationCut = true
         
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.writeObjects([element.url as NSURL])
+        pasteboard.writeObjects(files.map { $0.url as NSURL})
     }
     
-    func pasteElement() {
-        let finalURL: URL?
-        if let url = pasteboardURL {
-            finalURL = url
+    func moveToTrash(files: [FileItem]) {
+        for file in files {
+            do {
+                try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
+            } catch {
+                print("Error while moving \(file.name) to trash: \(error.localizedDescription)")
+            }
+        }
+        loadCurrentDirectory()
+    }
+    
+    func pasteFiles() {
+        let finalURLs: [URL]
+        if !pasteboardURLs.isEmpty {
+            finalURLs = pasteboardURLs
         } else {
             let pasteboard = NSPasteboard.general
-            finalURL = pasteboard.readObjects(forClasses: [NSURL.self], options: nil)?.first as? URL
+            finalURLs = (pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]) ?? []
         }
         
-        guard let sourceURL = finalURL else { return }
-        let destinationURL = currentDir.appendingPathComponent(sourceURL.lastPathComponent)
+        guard !finalURLs.isEmpty else { return }
         
-        var finalDestinationURL = destinationURL
-        var counter: Int = 1
-        let elementExtension = sourceURL.pathExtension
-        let elementNameWithoutExtension = sourceURL.deletingPathExtension().lastPathComponent
-        
-        while FileManager.default.fileExists(atPath: finalDestinationURL.path) {
-            counter += 1
-            let newName = "\(elementNameWithoutExtension) \(counter)"
-            finalDestinationURL = currentDir.appendingPathComponent(newName)
-            if !elementExtension.isEmpty {
-                finalDestinationURL = finalDestinationURL.appendingPathExtension(elementExtension)
+        for sourceURL in finalURLs {
+            let destinationURL = currentDir.appendingPathComponent(sourceURL.lastPathComponent)
+            var finalDestinationURL = destinationURL
+            var counter: Int = 1
+            let fileExtension = sourceURL.pathExtension
+            let fileNameWithoutExtension = sourceURL.deletingPathExtension().lastPathComponent
+            
+            while FileManager.default.fileExists(atPath: finalDestinationURL.path) {
+                counter += 1
+                let newName = "\(fileNameWithoutExtension) \(counter)"
+                finalDestinationURL = currentDir.appendingPathComponent(newName)
+                if !fileExtension.isEmpty {
+                    finalDestinationURL = finalDestinationURL.appendingPathExtension(fileExtension)
+                }
+            }
+            
+            do {
+                if isOperationCut {
+                    try FileManager.default.moveItem(at: sourceURL, to: finalDestinationURL)
+                } else {
+                    try FileManager.default.copyItem(at: sourceURL, to: finalDestinationURL)
+                }
+            } catch {
+                print("Error pasting file \(sourceURL.lastPathComponent): \(error.localizedDescription)")
             }
         }
-        
-        do {
-            if isOperationCut {
-                try FileManager.default.moveItem(at: sourceURL, to: finalDestinationURL)
-                self.pasteboardURL = nil
-                self.isOperationCut = false
-            } else {
-                try FileManager.default.copyItem(at: sourceURL, to: finalDestinationURL)
-            }
-            loadCurrentDirectory()
-        } catch {
-            print("Error pasting file \(error.localizedDescription)")
+        if isOperationCut {
+            self.pasteboardURLs = []
+            self.isOperationCut = false
         }
+        loadCurrentDirectory()
     }
 }
