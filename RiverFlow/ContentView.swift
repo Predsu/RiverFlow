@@ -2,17 +2,62 @@ import SwiftUI
 import Foundation
 import Observation
 
+private struct FileFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID : CGRect], nextValue: () -> [UUID : CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
 struct ContentView: View {
     @State private var viewModel = FolderViewModel()
     @State private var selectedSideBarItem: SideBarItem? = .home
-    @State private var selectedElementsViewStyle: ElementsViewStyle = .grid
-    @State private var selectedFileId: UUID? = nil
+    @State private var selectedFileViewStyle: FileViewStyle = .grid
+    @State private var selectedFileIds: Set<UUID> = []
     @State private var refreshTrigger = 0
     @State private var goUpTrigger = 0
+    @State private var lastAnchorFileId: UUID?
+    @State private var fileFrames: [UUID: CGRect] = [:]
+    @State private var selectionRect: CGRect? = nil
+    @State private var dragStartLocation: CGPoint? = nil
+    @State private var selectionBaseline: Set<UUID> = []
     
     let gridCols = [
         GridItem(.adaptive(minimum: 130), spacing: 16)
     ]
+    
+    private var selectedFiles: [FileItem] {
+        viewModel.files.filter { selectedFileIds.contains($0.id) }
+    }
+    
+    private func handleTap(for file: FileItem, in list: [FileItem]) {
+        let modifiers = NSEvent.modifierFlags
+        if modifiers.contains(.shift) {
+            let anchorId = lastAnchorFileId ?? file.id
+            if let anchorIndex = list.firstIndex(where: { $0.id == anchorId}),
+               let currentIndex = list.firstIndex(where: { $0.id == file.id }) {
+                let range = anchorIndex < currentIndex ? anchorIndex...currentIndex : currentIndex...anchorIndex
+                selectedFileIds = Set(list[range].map { $0.id })
+            }
+        } else if modifiers.contains(.command) {
+            if selectedFileIds.contains(file.id) {
+                selectedFileIds.remove(file.id)
+            } else {
+                selectedFileIds.insert(file.id)
+            }
+            lastAnchorFileId = file.id
+        } else {
+            selectedFileIds = [file.id]
+            lastAnchorFileId = file.id
+        }
+    }
+    
+    private func handleRightClick(for file: FileItem) {
+        if !selectedFileIds.contains(file.id) {
+            selectedFileIds = [file.id]
+            lastAnchorFileId = file.id
+        }
+    }
     
     var body: some View {
         NavigationSplitView {
@@ -21,7 +66,7 @@ struct ContentView: View {
             detailView
         }
         .onChange(of: selectedSideBarItem) { _, newValue in
-            selectedFileId = nil
+            selectedFileIds = []
             if let newSection = newValue {
                 viewModel.currentDir = newSection.url
                 viewModel.loadCurrentDirectory()
@@ -42,7 +87,7 @@ struct ContentView: View {
     @ViewBuilder
     private var detailView: some View {
         VStack {
-            if selectedElementsViewStyle == .list {
+            if selectedFileViewStyle == .list {
                 listView
             } else {
                 gridView
@@ -104,8 +149,8 @@ struct ContentView: View {
             }
             
             ToolbarItem(placement: .primaryAction) {
-                Picker("View Style", selection: $selectedElementsViewStyle) {
-                    ForEach(ElementsViewStyle.allCases) { style in
+                Picker("View Style", selection: $selectedFileViewStyle) {
+                    ForEach(FileViewStyle.allCases) { style in
                         Label(style.rawValue, systemImage: style.iconName)
                             .tag(style)
                     }
@@ -116,17 +161,17 @@ struct ContentView: View {
             }
         }
         .onCommand(#selector(NSText.copy(_:))) {
-            if let selectedId = selectedFileId, let file = viewModel.files.first(where: { $0.id == selectedId }) {
-                viewModel.copyElement(element: file)
+            if !selectedFiles.isEmpty {
+                viewModel.copyFiles(files: selectedFiles)
             }
         }
         .onCommand(#selector(NSText.cut(_:))) {
-            if let selectedId = selectedFileId, let file = viewModel.files.first(where: { $0.id == selectedId }) {
-                viewModel.cutElement(element: file)
+            if !selectedFiles.isEmpty {
+                viewModel.cutFiles(files: selectedFiles)
             }
         }
         .onCommand(#selector(NSText.paste(_:))) {
-            viewModel.pasteElement()
+            viewModel.pasteFiles()
         }
     }
 
@@ -135,33 +180,40 @@ struct ContentView: View {
             ForEach(viewModel.sortedFiles) { file in
                 FileListItemView(
                     file: file,
-                    isSelected: selectedFileId == file.id,
+                    isSelected: selectedFileIds.contains(file.id),
                     onTap: {
-                        selectedFileId = file.id
+                        handleTap(for: file, in: viewModel.sortedFiles)
+                    },
+                    onRightClick: {
+                        handleRightClick(for: file)
                     },
                     onDoubleTap: {
-                        selectedFileId = file.id
                         if file.url.pathExtension == "app" {
                             NSWorkspace.shared.open(file.url)
                         } else if file.itemType == .DIRECTORY {
                             viewModel.enterDirectory(dir: file)
-                            selectedFileId = nil
+                            selectedFileIds.removeAll()
                         } else {
                             NSWorkspace.shared.open(file.url)
                         }
                     },
                     onCopy: {
-                        viewModel.copyElement(element: file)
+                        viewModel.copyFiles(files: selectedFiles)
                     },
                     onCut: {
-                        viewModel.cutElement(element: file)
+                        viewModel.cutFiles(files: selectedFiles)
                     },
                     onOpenAsDirectory: {
                         viewModel.enterDirectory(dir: file)
-                        selectedFileId = nil
+                        selectedFileIds = []
                     },
                     onRefreshRequired: {
                         viewModel.loadCurrentDirectory()
+                    },
+                    onMoveToTrash: {
+                        let filesToTrash = selectedFileIds.contains(file.id) ? selectedFiles : [file]
+                        viewModel.moveToTrash(files: filesToTrash)
+                        selectedFileIds.removeAll()
                     }
                 )
             }
@@ -174,47 +226,113 @@ struct ContentView: View {
                 ForEach(viewModel.sortedFiles) { file in
                     FileGridItemView(
                         file: file,
-                        isSelected: selectedFileId == file.id,
+                        isSelected: selectedFileIds.contains(file.id),
                         onTap: {
-                            selectedFileId = file.id
+                            handleTap(for: file, in: viewModel.sortedFiles)
+                        },
+                        onRightClick: {
+                            handleRightClick(for: file)
                         },
                         onDoubleTap: {
                             if file.url.pathExtension == "app" {
                                 NSWorkspace.shared.open(file.url)
                             } else if file.itemType == .DIRECTORY {
                                 viewModel.enterDirectory(dir: file)
-                                selectedFileId = nil
+                                selectedFileIds.removeAll()
                             } else {
                                 NSWorkspace.shared.open(file.url)
                             }
                         },
                         onCopy: {
-                            viewModel.copyElement(element: file)
+                            viewModel.copyFiles(files: selectedFiles)
                         },
                         onCut: {
-                            viewModel.cutElement(element: file)
+                            viewModel.cutFiles(files: selectedFiles)
                         },
                         onOpenAsDirectory: {
                             viewModel.enterDirectory(dir: file)
-                            selectedFileId = nil
+                            selectedFileIds = []
                         },
                         onRefreshRequired: {
                             viewModel.loadCurrentDirectory()
+                        },
+                        onMoveToTrash: {
+                            let filesToTrash = selectedFileIds.contains(file.id) ? selectedFiles : [file]
+                            viewModel.moveToTrash(files: filesToTrash)
+                            selectedFileIds.removeAll()
+                        }
+                    )
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear
+                                .preference(
+                                    key: FileFramePreferenceKey.self,
+                                    value: [file.id: geo.frame(in: .named("fileGridArea"))]
+                                )
                         }
                     )
                 }
             }
             .padding()
         }
+        .coordinateSpace(name: "fileGridArea")
+        .onPreferenceChange(FileFramePreferenceKey.self) { frames in
+            fileFrames = frames
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
         .contentShape(Rectangle())
-        .onTapGesture {
-            selectedFileId = nil
-        }
+        .overlay(
+            Group {
+                if let rect = selectionRect {
+                    Rectangle()
+                        .fill(Color.accentColor.opacity(0.2))
+                        .overlay(Rectangle().stroke(Color.accentColor, lineWidth: 1))
+                        .frame(width: rect.width, height: rect.height)
+                        .position(x: rect.midX, y: rect.midY)
+                        .allowsHitTesting(false)
+                }
+            }
+        )
+        .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .named("fileGridArea"))
+                .onChanged { value in
+                    if dragStartLocation == nil {
+                        dragStartLocation = value.startLocation
+                        selectionBaseline = NSEvent.modifierFlags.contains(.shift) ? selectedFileIds : []
+                    }
+                    guard let start = dragStartLocation else { return }
+                    let rect = CGRect(
+                        x: min(start.x, value.location.x),
+                        y: min(start.y, value.location.y),
+                        width: abs(value.location.x - start.x),
+                        height: abs(value.location.y - start.y)
+                    )
+                    selectionRect = rect
+                    if rect.width > 2 || rect.height > 2 {
+                        let intersectingIds = fileFrames.filter { $0.value.intersects(rect) }.map { $0.key }
+                        selectedFileIds = selectionBaseline.union(intersectingIds)
+                    }
+                }
+                .onEnded { value in
+                    let dx = abs(value.location.x - value.startLocation.x)
+                    let dy = abs(value.location.y - value.startLocation.y)
+                    if dx < 2 && dy < 2 {
+                        let modifiers = NSEvent.modifierFlags
+                        if !modifiers.contains(.shift) && !modifiers.contains(.command) {
+                            selectedFileIds.removeAll()
+                        }
+                    }
+                    dragStartLocation = nil
+                    selectionRect = nil
+                }
+        )
+//        .onTapGesture {
+//            selectedFileIds.removeAll()
+//        }
         .contextMenu {
-            Button(action: { viewModel.pasteElement() }) {
-                Text("Paste Element")
+            Button(action: { viewModel.pasteFiles() }) {
+                Text("Paste File")
                 Image(systemName: "doc.on.clipboard.fill")
             }
             
@@ -248,7 +366,7 @@ struct ContentView: View {
         .onChange(of: selectedSideBarItem) { _, newValue in
             if let newSection = newValue {
                 if viewModel.currentDir.standardizedFileURL != newSection.url.standardizedFileURL {
-                    selectedFileId = nil
+                    selectedFileIds = []
                     viewModel.currentDir = newSection.url
                     viewModel.loadCurrentDirectory()
                 }
