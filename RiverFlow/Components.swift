@@ -642,3 +642,11 @@ struct InteractivePathTitleView: View {
         }
     }
 }
+
+struct SoundEffects {
+    static func playSoundEffect(name: String) {
+        if let sound = NSSound(named: name) {
+            sound.play()
+        }
+    }
+}
