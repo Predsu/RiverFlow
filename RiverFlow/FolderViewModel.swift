@@ -11,6 +11,13 @@ class FolderViewModel {
     var pasteboardURLs: [URL] = []
     var isOperationCut: Bool = false
     
+    weak var undoManager: UndoManager?
+    
+    private func registerUndo(actionName: String, _ handler: @escaping (FolderViewModel) -> Void) {
+        undoManager?.registerUndo(withTarget: self, handler: handler)
+        undoManager?.setActionName(actionName)
+    }
+    
     var showHiddenFiles: Bool = false {
         didSet {
             loadCurrentDirectory()
@@ -91,15 +98,6 @@ class FolderViewModel {
                     )
                 }
             }
-//            .sorted {
-//                if $0.itemType == .DIRECTORY && $1.itemType == .FILE { return true }
-//                if $0.itemType == .FILE && $1.itemType == .DIRECTORY { return false }
-//                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
-//            }
-            
-//            self.files = mappedFiles.sorted {
-//                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
-//            }
             
             self.files = mappedFiles
             
@@ -141,6 +139,7 @@ class FolderViewModel {
                 attributes: nil
             )
             loadCurrentDirectory()
+            registerCreateUndo(url: dirURL, isDirectory: true)
         } catch {
             print("Error creating directory \(error.localizedDescription)")
         }
@@ -165,8 +164,37 @@ class FolderViewModel {
             
         if success {
             loadCurrentDirectory()
+            registerCreateUndo(url: fileURL, isDirectory: false)
         } else {
             print("Error creating file")
+        }
+    }
+    
+    private func registerCreateUndo(url: URL, isDirectory: Bool) {
+        registerUndo(actionName: isDirectory ? "New Folder" : "New File") { target in
+            do {
+                try FileManager.default.removeItem(at: url)
+                target.loadCurrentDirectory()
+                target.registerRecreateUndo(url: url, isDirectory: isDirectory)
+            } catch {
+                print("Error while undo creation of \(url.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func registerRecreateUndo(url: URL, isDirectory: Bool) {
+        registerUndo(actionName: isDirectory ? "New Folder" : "New File") { target in
+            do {
+                if isDirectory {
+                    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: nil)
+                } else {
+                    FileManager.default.createFile(atPath: url.path, contents: Data(), attributes: nil)
+                }
+                target.loadCurrentDirectory()
+                target.registerCreateUndo(url: url, isDirectory: isDirectory)
+            } catch {
+                print("Error while redo creation of \(url.lastPathComponent): \(error.localizedDescription)")
+            }
         }
     }
     
@@ -189,14 +217,55 @@ class FolderViewModel {
     }
     
     func moveToTrash(files: [FileItem]) {
+        var restorePairs: [(trashed: URL, original: URL)] = []
         for file in files {
+            var resultingURL: NSURL?
             do {
-                try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
+                try FileManager.default.trashItem(at: file.url, resultingItemURL: &resultingURL)
+                if let trashedURL = resultingURL as URL? {
+                    restorePairs.append((trashed: trashedURL, original: file.url))
+                }
             } catch {
                 print("Error while moving \(file.name) to trash: \(error.localizedDescription)")
             }
         }
         loadCurrentDirectory()
+        
+        guard !restorePairs.isEmpty else { return }
+        registerTrashUndo(restorePairs: restorePairs)
+    }
+    
+    private func registerTrashUndo(restorePairs: [(trashed: URL, original: URL)]) {
+        registerUndo(actionName: "Move to Trash") { target in
+            var restoredURLs: [URL] = []
+            for pair in restorePairs {
+                do {
+                    try FileManager.default.moveItem(at: pair.trashed, to: pair.original)
+                    restoredURLs.append(pair.original)
+                } catch {
+                    print("Error restoring \(pair.original.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
+            target.loadCurrentDirectory()
+            target.registerRetrashUndo(originalURLs: restoredURLs)
+        }
+    }
+    
+    private func registerRetrashUndo(originalURLs: [URL]) {
+        registerUndo(actionName: "Move to Trash") { target in
+            var restorePairs: [(trashed: URL, original: URL)] = []
+            for url in originalURLs {
+                var resultingURL: NSURL?
+                do {
+                    try FileManager.default.trashItem(at: url, resultingItemURL: &resultingURL)
+                    if let trashedURL = resultingURL as URL? {
+                        restorePairs.append((trashed: trashedURL, original: url))
+                    }
+                } catch {
+                    print("Error re-trashing \(url.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
+        }
     }
     
     func pasteFiles() {
@@ -209,6 +278,9 @@ class FolderViewModel {
         }
         
         guard !finalURLs.isEmpty else { return }
+        
+        let wasCut = isOperationCut
+        var pastedPairs: [(source: URL, destination: URL)] = []
         
         for sourceURL in finalURLs {
             let destinationURL = currentDir.appendingPathComponent(sourceURL.lastPathComponent)
@@ -232,6 +304,7 @@ class FolderViewModel {
                 } else {
                     try FileManager.default.copyItem(at: sourceURL, to: finalDestinationURL)
                 }
+                pastedPairs.append((source: sourceURL, destination: finalDestinationURL))
             } catch {
                 print("Error pasting file \(sourceURL.lastPathComponent): \(error.localizedDescription)")
             }
@@ -241,5 +314,44 @@ class FolderViewModel {
             self.isOperationCut = false
         }
         loadCurrentDirectory()
+        
+        guard !pastedPairs.isEmpty else { return }
+        registerPasteUndo(pastedPairs: pastedPairs, wasCut: wasCut)
+    }
+    
+    private func registerPasteUndo(pastedPairs: [(source: URL, destination: URL)], wasCut: Bool) {
+        registerUndo(actionName: wasCut ? "Move": "Paste") { target in
+            for pair in pastedPairs {
+                do {
+                    if wasCut {
+                        try FileManager.default.moveItem(at: pair.destination, to: pair.source)
+                    } else {
+                        try FileManager.default.removeItem(at: pair.destination)
+                    }
+                } catch {
+                    print("Error undoing paste of \(pair.destination.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
+            target.loadCurrentDirectory()
+            target.registerRepasteUndo(pastedPairs: pastedPairs, wasCut: wasCut)
+        }
+    }
+    
+    private func registerRepasteUndo(pastedPairs: [(source: URL, destination: URL)], wasCut: Bool) {
+        registerUndo(actionName: wasCut ? "Move" : "Paste") { target in
+            for pair in pastedPairs {
+                do {
+                    if wasCut {
+                        try FileManager.default.moveItem(at: pair.source, to: pair.destination)
+                    } else {
+                        try FileManager.default.copyItem(at: pair.source, to: pair.destination)
+                    }
+                } catch {
+                    print("Error redoing paste of \(pair.destination.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
+            target.loadCurrentDirectory()
+            target.registerPasteUndo(pastedPairs: pastedPairs, wasCut: wasCut)
+        }
     }
 }

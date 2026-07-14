@@ -10,6 +10,7 @@ private struct FileFramePreferenceKey: PreferenceKey {
 }
 
 struct ContentView: View {
+    @Environment(\.undoManager) private var undoManager
     @State private var viewModel = FolderViewModel()
     @State private var selectedSideBarItem: SideBarItem? = .home
     @State private var selectedFileViewStyle: FileViewStyle = .grid
@@ -71,6 +72,9 @@ struct ContentView: View {
                 viewModel.currentDir = newSection.url
                 viewModel.loadCurrentDirectory()
             }
+        }
+        .onAppear() {
+            viewModel.undoManager = undoManager
         }
     }
 
