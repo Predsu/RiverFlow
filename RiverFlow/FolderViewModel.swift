@@ -35,6 +35,7 @@ class FolderViewModel {
     init(startDir: URL = URL(fileURLWithPath: NSHomeDirectory())) {
         self.currentDir = startDir
         loadCurrentDirectory()
+        SoundEffects.playSoundEffect(name: "riverflow")
     }
     
     var sortedFiles: [FileItem] {
@@ -230,6 +231,8 @@ class FolderViewModel {
             }
         }
         loadCurrentDirectory()
+        
+        SoundEffects.playSoundEffect(name: "trash")
         
         guard !restorePairs.isEmpty else { return }
         registerTrashUndo(restorePairs: restorePairs)
