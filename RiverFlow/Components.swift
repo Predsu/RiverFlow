@@ -161,7 +161,7 @@ class FileWindowManager: NSObject, NSWindowDelegate {
     }
     
     private func openInfoView(for file: FileItem) {
-        let windowIdentifier = "elementinfowindow-\(file.id.uuidString)"
+        let windowIdentifier = "fileinfowindow-\(file.id.uuidString)"
         
         if let existingWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == windowIdentifier }) {
             existingWindow.makeKeyAndOrderFront(nil)
@@ -205,7 +205,7 @@ class ThumbnailManager {
         cache.evictsObjectsWithDiscardedContent = true
     }
     
-    func getElementThumbnail(for url: URL, size: CGFloat, completion: @escaping (NSImage?) -> Void) {
+    func getFileThumbnail(for url: URL, size: CGFloat, completion: @escaping (NSImage?) -> Void) {
         let nsURL = url as NSURL
         
         if let cachedImage = cache.object(forKey: nsURL) {
@@ -386,7 +386,7 @@ struct FileIconView: View {
         guard !hasAttemptedLoad else { return }
         hasAttemptedLoad = true
         
-        ThumbnailManager.shared.getElementThumbnail(for: file.url, size: baseSize) { img in
+        ThumbnailManager.shared.getFileThumbnail(for: file.url, size: baseSize) { img in
             self.loadedThumbnail = img
         }
     }
@@ -396,11 +396,13 @@ struct FileGridItemView: View {
     let file: FileItem
     let isSelected: Bool
     let onTap: () -> Void
+    let onRightClick: () -> Void
     let onDoubleTap: () -> Void
     let onCopy: () -> Void
     let onCut: () -> Void
     let onOpenAsDirectory: () -> Void
     let onRefreshRequired: () -> Void
+    let onMoveToTrash: () -> Void
     
     var body: some View {
         VStack(spacing: 8) {
@@ -420,7 +422,9 @@ struct FileGridItemView: View {
                 .stroke(Color(.selectedControlColor), lineWidth: isSelected ? 2 : 0)
         )
         .contentShape(Rectangle())
-        .overlay(RightClickCatcher(onRightClick: onTap))
+        .overlay(RightClickCatcher(onRightClick: {
+            onRightClick()
+        }))
         .gesture(
             TapGesture(count: 1)
                 .onEnded {
@@ -446,19 +450,19 @@ struct FileGridItemView: View {
             Button(action: {
                 FileWindowManager.openInfoView(for: file)
             }) {
-                Text("Element Info")
+                Text("File Info")
                 Image(systemName: "info.circle")
             }
 
             Divider()
 
             Button(action: onCopy) {
-                Text("Copy Element")
+                Text("Copy File")
                 Image(systemName: "doc.on.doc")
             }
             
             Button(action: onCut) {
-                Text("Cut Element")
+                Text("Cut File")
                 Image(systemName: "arrow.right.doc.on.clipboard")
             }
             
@@ -469,21 +473,13 @@ struct FileGridItemView: View {
                 pasteboard.clearContents()
                 pasteboard.setString(file.url.path, forType: .string)
             }) {
-                Text("Copy Element Path")
+                Text("Copy File Path")
                 Image(systemName: "doc.on.doc")
             }
             
             Divider()
             
-            Button(action: {
-                do {
-                    try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
-                    onRefreshRequired()
-                } catch {
-                    print("Error while moving element to trash \(error.localizedDescription)")
-                }
-                
-            }) {
+            Button(action: onMoveToTrash) {
                 Text("Move to Trash")
                 Image(systemName: "trash")
             }
@@ -497,11 +493,13 @@ struct FileListItemView: View {
     let file: FileItem
     let isSelected: Bool
     let onTap: () -> Void
+    let onRightClick: () -> Void
     let onDoubleTap: () -> Void
     let onCopy: () -> Void
     let onCut: () -> Void
     let onOpenAsDirectory: () -> Void
     let onRefreshRequired: () -> Void
+    let onMoveToTrash: () -> Void
 
     var body: some View {
         HStack {
@@ -524,10 +522,9 @@ struct FileListItemView: View {
         .padding(.vertical, 4)
         .padding(.horizontal, 6)
         .background(isSelected ? Color(.selectedControlColor).opacity(0.2) : Color.clear)
-        .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(Color(.selectedControlColor), lineWidth: isSelected ? 1.5 : 0)
-        )
+        .overlay(RightClickCatcher(onRightClick: {
+            onRightClick()
+        }))
         .contentShape(Rectangle())
         .gesture(
             TapGesture(count: 1)
@@ -552,12 +549,12 @@ struct FileListItemView: View {
             Divider()
 
             Button(action: onCopy) {
-                Text("Copy Element")
+                Text("Copy File")
                 Image(systemName: "doc.on.doc")
             }
 
             Button(action: onCut) {
-                Text("Cut Element")
+                Text("Cut File")
                 Image(systemName: "arrow.right.doc.on.clipboard")
             }
 
@@ -568,20 +565,13 @@ struct FileListItemView: View {
                 pasteboard.clearContents()
                 pasteboard.setString(file.url.path, forType: .string)
             }) {
-                Text("Copy Element Path")
+                Text("Copy File Path")
                 Image(systemName: "doc.on.doc")
             }
 
             Divider()
 
-            Button(action: {
-                do {
-                    try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
-                    onRefreshRequired()
-                } catch {
-                    print("Error while moving item to trash \(error.localizedDescription)")
-                }
-            }) {
+            Button(action: onMoveToTrash) {
                 Text("Move to Trash")
                 Image(systemName: "trash")
             }
