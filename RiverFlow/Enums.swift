@@ -46,7 +46,7 @@ enum SideBarItem: String, CaseIterable, Identifiable {
 }
 
 // ngl i'm starting to like these
-enum ElementsViewStyle: String, CaseIterable, Identifiable {
+enum FileViewStyle: String, CaseIterable, Identifiable {
     case grid = "Grid"
     case list = "List"
     
