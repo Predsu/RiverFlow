@@ -35,7 +35,6 @@ class FolderViewModel {
     init(startDir: URL = URL(fileURLWithPath: NSHomeDirectory())) {
         self.currentDir = startDir
         loadCurrentDirectory()
-        SoundEffects.playSoundEffect(name: "riverflow")
     }
     
     var sortedFiles: [FileItem] {

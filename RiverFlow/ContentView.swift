@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var selectionRect: CGRect? = nil
     @State private var dragStartLocation: CGPoint? = nil
     @State private var selectionBaseline: Set<UUID> = []
+    @State private var showSplash = !SplashOverlay.hasShownSplashInThisSession
     
     let gridCols = [
         GridItem(.adaptive(minimum: 130), spacing: 16)
@@ -76,6 +77,10 @@ struct ContentView: View {
         .onAppear() {
             viewModel.undoManager = undoManager
         }
+        .overlay {
+            SplashOverlay(isPresented: $showSplash)
+        }
+        .toolbar(showSplash ? .hidden : .automatic)
     }
 
     private var sidebarView: some View {
