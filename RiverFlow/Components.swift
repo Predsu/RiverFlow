@@ -644,6 +644,12 @@ struct InteractivePathTitleView: View {
 }
 
 struct SoundEffects {
+    static func warmUpAudioEngine() {
+        if let silentSound = NSSound(named: "Tink") {
+            silentSound.volume = 0.0
+            silentSound.play()
+        }
+    }
     static func playSoundEffect(name: String) {
         if let sound = NSSound(named: name) {
             sound.play()

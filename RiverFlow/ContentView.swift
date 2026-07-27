@@ -75,6 +75,7 @@ struct ContentView: View {
             }
         }
         .onAppear() {
+            SoundEffects.warmUpAudioEngine()
             viewModel.undoManager = undoManager
         }
         .overlay {
