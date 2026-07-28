@@ -403,15 +403,31 @@ struct FileGridItemView: View {
     let onOpenAsDirectory: () -> Void
     let onRefreshRequired: () -> Void
     let onMoveToTrash: () -> Void
+    var viewModel: FolderViewModel
+    
+    var isEditing: Bool {
+        viewModel.editingFileID == file.id
+    }
     
     var body: some View {
         VStack(spacing: 8) {
             FileIconView(file: file, baseSize: 64)
-            Text(file.name)
-                .font(.system(size: 12))
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .frame(height: 32, alignment: .top)
+//            Text(file.name)
+//                .font(.system(size: 12))
+//                .lineLimit(2)
+//                .multilineTextAlignment(.center)
+//                .frame(height: 32, alignment: .top)
+            EditableFileNameView(
+                file: file,
+                isEditing: isEditing,
+                onCommit: { newName in
+                    viewModel.renameFile(file: file, to: newName)
+                    viewModel.editingFileID = nil
+                },
+                onCancel: {
+                    viewModel.editingFileID = nil
+                }
+            )
         }
         .padding(10)
         .frame(width: 120, height: 110, alignment: .top)
@@ -443,9 +459,18 @@ struct FileGridItemView: View {
                     Text("Show Package Contents")
                     Image(systemName: "folder.badge.gearshape")
                 }
+                
+                Divider()
             }
             
-            Divider()
+//            Button(action: {
+//                FolderViewModel.copySHA256Checksum(for: file.url)
+//            }) {
+//                Text("Copy SHA256 Checksum")
+//                Image(systemName: "number.square")
+//            }
+//            
+//            Divider()
             
             Button(action: {
                 FileWindowManager.openInfoView(for: file)
@@ -464,6 +489,13 @@ struct FileGridItemView: View {
             Button(action: onCut) {
                 Text("Cut File")
                 Image(systemName: "arrow.right.doc.on.clipboard")
+            }
+            
+            Button(action: {
+                viewModel.editingFileID = file.id
+            }) {
+                Text("Rename")
+                Image(systemName: "character.cursor.ibeam")
             }
             
             Divider()
@@ -617,7 +649,7 @@ struct InteractivePathTitleView: View {
         .padding(.horizontal, 8)
         .background(isHoveringPath ? Color(NSColor.quaternaryLabelColor) : Color.clear)
         .cornerRadius(4)
-        .frame(minWidth: 140, maxWidth: 320, alignment: .leading)
+        .frame(minWidth: 140, maxWidth: 310, alignment: .leading)
         .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isHoveringPath)
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -653,6 +685,57 @@ struct SoundEffects {
     static func playSoundEffect(name: String) {
         if let sound = NSSound(named: name) {
             sound.play()
+        }
+    }
+}
+
+struct EditableFileNameView: View {
+    let file: FileItem
+    let isEditing: Bool
+    let onCommit: (String) -> Void
+    let onCancel: () -> Void
+    
+    @State private var editedName: String = ""
+    @FocusState private var isFocused: Bool
+    
+    var body: some View {
+        Group {
+            if isEditing {
+                TextField("", text: $editedName)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.accentColor, lineWidth: 1.5)
+                    )
+                    .focused($isFocused)
+                    .onSubmit {
+                        commitChange()
+                    }
+                    .onExitCommand {
+                        onCancel()
+                    }
+                    .onAppear {
+                        editedName = file.url.lastPathComponent
+                        isFocused = true
+                    }
+            } else {
+                Text(file.url.lastPathComponent)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+            }
+        }
+    }
+    
+    private func commitChange() {
+        let trimmed = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty && trimmed != file.url.lastPathComponent {
+            onCommit(trimmed)
+        } else {
+            onCancel()
         }
     }
 }
