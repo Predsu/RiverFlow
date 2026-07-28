@@ -231,6 +231,8 @@ class FolderViewModel {
         }
         loadCurrentDirectory()
         
+        SoundEffects.playSoundEffect(name: "trash")
+        
         guard !restorePairs.isEmpty else { return }
         registerTrashUndo(restorePairs: restorePairs)
     }
