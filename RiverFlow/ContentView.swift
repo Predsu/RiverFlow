@@ -270,7 +270,8 @@ struct ContentView: View {
                             let filesToTrash = selectedFileIds.contains(file.id) ? selectedFiles : [file]
                             viewModel.moveToTrash(files: filesToTrash)
                             selectedFileIds.removeAll()
-                        }
+                        },
+                        viewModel: viewModel
                     )
                     .background(
                         GeometryReader { geo in
@@ -349,6 +350,22 @@ struct ContentView: View {
             Divider()
             
             Button(action: {
+                viewModel.openInTerminal(url: viewModel.currentDir)
+            }) {
+                Text("Open in Terminal")
+                Image(systemName: "apple.terminal")
+            }
+            
+            Button(action: {
+                viewModel.openInVSCode(url: viewModel.currentDir)
+            }) {
+                Text("Open in VSCode")
+                Image(systemName: "chevron.left.forwardslash.chevron.right")
+            }
+            
+            Divider()
+            
+            Button(action: {
                 viewModel.createNewDirectory()
             }) {
                 Text("Create Folder")
@@ -370,6 +387,13 @@ struct ContentView: View {
                 pasteboard.setString(viewModel.currentDir.path, forType: .string)
             }) {
                 Text("Copy Current Directory Path")
+                Image(systemName: "doc.on.doc")
+            }
+            
+            Button(action: {
+                viewModel.copyShellEscapedPath(for: viewModel.currentDir)
+            }) {
+                Text("Copy Shell-Formatted Dir Path")
                 Image(systemName: "doc.on.doc")
             }
         }

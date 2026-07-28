@@ -1,12 +1,15 @@
 import Foundation
 import Observation
 import AppKit
+import CryptoKit
 
 @Observable
 class FolderViewModel {
     var currentDir: URL
     var files: [FileItem] = []
     var currentSortingOption: FileSortOption = .name
+    
+    var editingFileID: UUID? = nil
     
     var pasteboardURLs: [URL] = []
     var isOperationCut: Bool = false
@@ -216,6 +219,20 @@ class FolderViewModel {
         pasteboard.writeObjects(files.map { $0.url as NSURL})
     }
     
+    func renameFile(file: FileItem, to newName: String) {
+        let trimmedNewName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedNewName.isEmpty, trimmedNewName != file.url.lastPathComponent else { return }
+        
+        let destinationURL = file.url.deletingLastPathComponent().appendingPathComponent(trimmedNewName)
+        
+        do {
+            try FileManager.default.moveItem(at: file.url, to: destinationURL)
+            loadCurrentDirectory()
+        } catch {
+            print("Error renaming file \(error.localizedDescription)")
+        }
+    }
+    
     func moveToTrash(files: [FileItem]) {
         var restorePairs: [(trashed: URL, original: URL)] = []
         for file in files {
@@ -354,6 +371,46 @@ class FolderViewModel {
             }
             target.loadCurrentDirectory()
             target.registerPasteUndo(pastedPairs: pastedPairs, wasCut: wasCut)
+        }
+    }
+    
+    func openInTerminal(url: URL) {
+        let terminalBundleID = "com.apple.Terminal"
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: terminalBundleID) {
+            let configuration = NSWorkspace.OpenConfiguration()
+            NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: configuration)
+        } else {
+            print("Terminal not found.")
+        }
+    }
+
+    func openInVSCode(url: URL) {
+        let vscodeBundleID = "com.microsoft.VSCode"
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: vscodeBundleID) {
+            let configuration = NSWorkspace.OpenConfiguration()
+            NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: configuration)
+        } else {
+            print("VS Code not found.")
+        }
+    }
+    
+    func copyShellEscapedPath(for url: URL) {
+        let escapedPath = url.path.replacingOccurrences(of: " ", with: "\\ ")
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(escapedPath, forType: .string)
+    }
+    
+    static func copySHA256Checksum(for fileURL: URL) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let data = try? Data(contentsOf: fileURL) else { return }
+            let hash = SHA256.hash(data: data)
+            let hashString = hash.compactMap { String(format: "%02x", $0) }.joined()
+            
+            DispatchQueue.main.async {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(hashString, forType: .string)
+            }
         }
     }
 }
