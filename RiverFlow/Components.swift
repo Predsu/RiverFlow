@@ -498,6 +498,18 @@ struct FileGridItemView: View {
                 Image(systemName: "character.cursor.ibeam")
             }
             
+            Button(action: {
+                if isSelected {
+                    let selectedFiles = viewModel.files.filter { viewModel.selectedFileIds.contains($0.id) }
+                    viewModel.compressToZip(files: selectedFiles)
+                } else {
+                    viewModel.compressToZip(files: [file])
+                }
+            }) {
+                Text("Compress to ZIP")
+                Image(systemName: "archivebox")
+            }
+            
             Divider()
             
             Button(action: {
