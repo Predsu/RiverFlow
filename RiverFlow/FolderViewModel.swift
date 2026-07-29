@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import AppKit
 import CryptoKit
+import UniformTypeIdentifiers
 
 @Observable
 class FolderViewModel {
@@ -34,6 +35,10 @@ class FolderViewModel {
     
     var currentDirName: String {
         return currentDir.path == "/" ? "/" : currentDir.lastPathComponent
+    }
+    
+    var selectedFiles: [FileItem] {
+        files.filter { selectedFileIds.contains($0.id) }
     }
     
     init(startDir: URL = URL(fileURLWithPath: NSHomeDirectory())) {
@@ -451,6 +456,60 @@ class FolderViewModel {
             }
                 
             SoundEffects.playSoundEffect(name: "confirmation")
+        }
+    }
+    
+    func openFileWith(file: FileItem) {
+        let panel = NSOpenPanel()
+        panel.title = "Select app used to open the file"
+        panel.prompt = "Open"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        if #available(macOS 11.0, *) {
+            panel.allowedContentTypes = [.application, .applicationBundle]
+        } else {
+            panel.allowedFileTypes = ["app"]
+        }
+        panel.begin { response in
+            guard response == .OK, let appURL = panel.url else { return }
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            NSWorkspace.shared.open([file.url], withApplicationAt: appURL, configuration: configuration) { runningApp, error in
+                if let error = error {
+                    print("Error opening file: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    func revealInFinder(url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+    
+    func createFolderFromSelection(files: [FileItem]) {
+        guard !files.isEmpty else { return }
+        let fileManager = FileManager.default
+        
+        let baseFolderURL = currentDir.appendingPathComponent("New Folder")
+        var uniqueFolderURL = baseFolderURL
+        var counter = 1
+        while fileManager.fileExists(atPath: uniqueFolderURL.path) {
+            uniqueFolderURL = currentDir.appendingPathComponent("New Folder \(counter)")
+            counter += 1
+        }
+        
+        do {
+            try fileManager.createDirectory(at: uniqueFolderURL, withIntermediateDirectories: true)
+            for file in files {
+                let destination = uniqueFolderURL.appendingPathComponent(file.url.lastPathComponent)
+                try fileManager.moveItem(at: file.url, to: destination)
+            }
+            
+            loadCurrentDirectory()
+        } catch {
+            print("Błąd podczas tworzenia folderu z zaznaczenia: \(error.localizedDescription)")
         }
     }
 }
