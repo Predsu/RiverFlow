@@ -89,6 +89,8 @@ struct ContentView: View {
     @State private var dragStartLocation: CGPoint? = nil
     @State private var selectionBaseline: Set<UUID> = []
     @State private var showSplash = !SplashOverlay.hasShownSplashInThisSession
+    @State private var dropTargetedFileId: UUID? = nil
+    @State private var isMoveUpTargeted = false
     
     let gridCols = [
         GridItem(.adaptive(minimum: 130), spacing: 16)
@@ -131,6 +133,7 @@ struct ContentView: View {
         }
         .onChange(of: selectedSideBarItem) { _, newValue in
             viewModel.selectedFileIds = []
+            isMoveUpTargeted = false
             if let newSection = newValue {
                 viewModel.currentDir = newSection.url
                 viewModel.loadCurrentDirectory()
@@ -144,6 +147,10 @@ struct ContentView: View {
             SplashOverlay(isPresented: $showSplash)
         }
         .toolbar(showSplash ? .hidden : .automatic)
+        .dropDestination(for: URL.self) { urls, location in
+            viewModel.handleDrop(urls: urls)
+            return true
+        }
     }
 
     private var sidebarView: some View {
@@ -170,14 +177,33 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button(action: {
+                    guard viewModel.currentDir.path != "/" else { return }
                     viewModel.goToParentDirectory()
                     goUpTrigger += 1
                 }) {
                     Image(systemName: "arrow.up")
                         .symbolEffect(.bounce.byLayer, options: .speed(8), value: goUpTrigger)
                 }
-                .disabled(viewModel.currentDir.path == "/")
+                // disabled blocks hit testing
+                .opacity(viewModel.currentDir.path == "/" ? 0.4 : 1.0)
                 .help("Go To Parent Directory")
+                .padding(4)
+                .contentShape(Rectangle())
+                .background {
+                    if isMoveUpTargeted {
+                        Capsule()
+                            .fill(Color.accentColor.opacity(0.25))
+                    }
+                }
+                .scaleEffect(isMoveUpTargeted ? 1.15 : 1.0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isMoveUpTargeted)
+                .dropDestination(for: URL.self) { urls, _ in
+                    guard viewModel.currentDir.path != "/" else { return false }
+                    viewModel.handleDrop(urls: urls, to: viewModel.currentDir.deletingLastPathComponent())
+                    return true
+                } isTargeted: { targeted in
+                    isMoveUpTargeted = targeted && viewModel.currentDir.path != "/"
+                }
                 
                 Button(action: {
                     viewModel.loadCurrentDirectory()
@@ -253,6 +279,7 @@ struct ContentView: View {
                     FileListItemView(
                         file: file,
                         isSelected: viewModel.selectedFileIds.contains(file.id),
+                        isTargeted: dropTargetedFileId == file.id,
                         onTap: {
                             handleTap(for: file, in: viewModel.sortedFiles)
                         },
@@ -289,6 +316,20 @@ struct ContentView: View {
                         },
                         viewModel: viewModel
                     )
+                    .draggable(file) {
+                        FileIconView(file: file, baseSize: 32)
+                    }
+                    .dropDestination(for: URL.self) { urls, _ in
+                        if file.itemType == .DIRECTORY {
+                            viewModel.handleDrop(urls: urls, to: file.url)
+                            return true
+                        }
+                        return false
+                    } isTargeted: { targeted in
+                        if file.itemType == .DIRECTORY {
+                            dropTargetedFileId = targeted ? file.id : nil
+                        }
+                    }
             }
         }
     }
@@ -300,6 +341,7 @@ struct ContentView: View {
                     FileGridItemView(
                         file: file,
                         isSelected: viewModel.selectedFileIds.contains(file.id),
+                        isTargeted: dropTargetedFileId == file.id,
                         onTap: {
                             handleTap(for: file, in: viewModel.sortedFiles)
                         },
@@ -336,15 +378,20 @@ struct ContentView: View {
                         },
                         viewModel: viewModel
                     )
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear
-                                .preference(
-                                    key: FileFramePreferenceKey.self,
-                                    value: [file.id: geo.frame(in: .named("fileGridArea"))]
-                                )
+                    .draggable(file) {
+                        FileIconView(file: file, baseSize: 32)
+                    }
+                    .dropDestination(for: URL.self) { urls, _ in
+                        if file.itemType == .DIRECTORY {
+                            viewModel.handleDrop(urls: urls, to: file.url)
+                            return true
                         }
-                    )
+                        return false
+                    } isTargeted: { targeted in
+                        if file.itemType == .DIRECTORY {
+                            dropTargetedFileId = targeted ? file.id : nil
+                        }
+                    }
                 }
             }
             .padding()

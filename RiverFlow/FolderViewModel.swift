@@ -343,6 +343,33 @@ class FolderViewModel {
         guard !pastedPairs.isEmpty else { return }
         registerPasteUndo(pastedPairs: pastedPairs, wasCut: wasCut)
     }
+
+    func handleDrop(urls: [URL], to destinationFolder: URL? = nil) {
+        let targetDir = destinationFolder ?? currentDir
+        var hasChanges = false
+        
+        for sourceURL in urls {
+            let destinationURL = targetDir.appendingPathComponent(sourceURL.lastPathComponent)
+            if sourceURL.standardizedFileURL == destinationURL.standardizedFileURL {
+                continue
+            }
+            
+            do {
+                if sourceURL.path.hasPrefix(NSHomeDirectory()) {
+                    try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
+                } else {
+                    try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+                }
+                hasChanges = true
+            } catch {
+                print("Error handling drop: \(error.localizedDescription)")
+            }
+        }
+        
+        if hasChanges {
+            loadCurrentDirectory()
+        }
+    }
     
     private func registerPasteUndo(pastedPairs: [(source: URL, destination: URL)], wasCut: Bool) {
         registerUndo(actionName: wasCut ? "Move": "Paste") { target in
