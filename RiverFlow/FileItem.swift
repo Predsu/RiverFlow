@@ -1,4 +1,6 @@
 import Foundation
+import SwiftUI
+import UniformTypeIdentifiers
 
 struct FileItem: Identifiable {
     let id = UUID()
@@ -35,5 +37,11 @@ struct FileItem: Identifiable {
         switch exten {
         default: return exten.uppercased()
         }
+    }
+}
+
+extension FileItem: Transferable {
+    public static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation(exporting: \.url)
     }
 }

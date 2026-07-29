@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import QuickLookThumbnailing
+import UniformTypeIdentifiers
 
 struct RightClickCatcher: NSViewRepresentable {
     let onRightClick: () -> Void
@@ -500,6 +501,7 @@ struct FileContextMenu: View {
 struct FileGridItemView: View {
     let file: FileItem
     let isSelected: Bool
+    var isTargeted: Bool = false
     let onTap: () -> Void
     let onRightClick: () -> Void
     let onDoubleTap: () -> Void
@@ -536,11 +538,20 @@ struct FileGridItemView: View {
         }
         .padding(10)
         .frame(width: 120, height: 110, alignment: .top)
-        .background(isSelected ? Color(.selectedControlColor).opacity(0.15) : Color.clear)
+        .background(
+            ZStack {
+                if isSelected {
+                    Color(.selectedControlColor).opacity(0.15)
+                }
+                if isTargeted && file.itemType == .DIRECTORY {
+                    Color.accentColor.opacity(0.2)
+                }
+            }
+        )
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(.selectedControlColor), lineWidth: isSelected ? 2 : 0)
+                .stroke(isTargeted && file.itemType == .DIRECTORY ? Color.accentColor : Color(.selectedControlColor), lineWidth: (isSelected || (isTargeted && file.itemType == .DIRECTORY)) ? 2 : 0)
         )
         .contentShape(Rectangle())
         .overlay(RightClickCatcher(onRightClick: {
@@ -575,6 +586,7 @@ struct FileGridItemView: View {
 struct FileListItemView: View {
     let file: FileItem
     let isSelected: Bool
+    var isTargeted: Bool = false
     let onTap: () -> Void
     let onRightClick: () -> Void
     let onDoubleTap: () -> Void
@@ -605,7 +617,16 @@ struct FileListItemView: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 6)
-        .background(isSelected ? Color(.selectedControlColor).opacity(0.2) : Color.clear)
+        .background(
+            ZStack {
+                if isSelected {
+                    Color(.selectedControlColor).opacity(0.2)
+                }
+                if isTargeted && file.itemType == .DIRECTORY {
+                    Color.accentColor.opacity(0.2)
+                }
+            }
+        )
         .overlay(RightClickCatcher(onRightClick: {
             onRightClick()
         }))
