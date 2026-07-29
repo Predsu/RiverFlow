@@ -509,7 +509,7 @@ class FolderViewModel {
             
             loadCurrentDirectory()
         } catch {
-            print("Błąd podczas tworzenia folderu z zaznaczenia: \(error.localizedDescription)")
+            print("Error creating folder from selection: \(error.localizedDescription)")
         }
     }
 }
