@@ -392,6 +392,111 @@ struct FileIconView: View {
     }
 }
 
+struct FileContextMenu: View {
+    let file: FileItem
+    let viewModel: FolderViewModel
+    let isSelected: Bool
+    let onOpenAsDirectory: () -> Void
+    let onCopy: () -> Void
+    let onCut: () -> Void
+    let onMoveToTrash: () -> Void
+
+    var body: some View {
+        Group {
+            Button(action: {
+                viewModel.openFileWith(file: file)
+            }) {
+                Text("Open File With")
+                Image(systemName: "arrow.up.forward.app")
+            }
+            
+            Button(action: {
+                viewModel.revealInFinder(url: file.url)
+            }) {
+                Text("Reveal in Finder")
+                Image(systemName: "magnifyingglass")
+            }
+            
+            Divider()
+            
+            if file.url.pathExtension == "app" {
+                Button(action: onOpenAsDirectory) {
+                    Text("Show Package Contents")
+                    Image(systemName: "folder.badge.gearshape")
+                }
+                
+                Divider()
+            }
+            
+            Button(action: {
+                FileWindowManager.openInfoView(for: file)
+            }) {
+                Text("File Info")
+                Image(systemName: "info.circle")
+            }
+
+            Divider()
+
+            Button(action: onCopy) {
+                Text("Copy File")
+                Image(systemName: "doc.on.doc")
+            }
+            
+            Button(action: onCut) {
+                Text("Cut File")
+                Image(systemName: "arrow.right.doc.on.clipboard")
+            }
+            
+            Button(action: {
+                viewModel.editingFileID = file.id
+            }) {
+                Text("Rename")
+                Image(systemName: "character.cursor.ibeam")
+            }
+            
+            Button(action: {
+                if isSelected {
+                    let selectedFiles = viewModel.files.filter { viewModel.selectedFileIds.contains($0.id) }
+                    viewModel.compressToZip(files: selectedFiles)
+                } else {
+                    viewModel.compressToZip(files: [file])
+                }
+            }) {
+                Text("Compress to ZIP")
+                Image(systemName: "archivebox")
+            }
+            
+            if viewModel.selectedFileIds.count > 1 && viewModel.selectedFileIds.contains(file.id) {
+                Button(action: {
+                    viewModel.createFolderFromSelection(files: viewModel.selectedFiles)
+                    viewModel.selectedFileIds.removeAll()
+                }) {
+                    Text("Create Folder with Selected")
+                    Image(systemName: "folder.badge.plus")
+                }
+            }
+            
+            Divider()
+            
+            Button(action: {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(file.url.path, forType: .string)
+            }) {
+                Text("Copy File Path")
+                Image(systemName: "doc.on.doc")
+            }
+            
+            Divider()
+            
+            Button(action: onMoveToTrash) {
+                Text("Move to Trash")
+                Image(systemName: "trash")
+            }
+        }
+    }
+}
+
 struct FileGridItemView: View {
     let file: FileItem
     let isSelected: Bool
@@ -403,15 +508,31 @@ struct FileGridItemView: View {
     let onOpenAsDirectory: () -> Void
     let onRefreshRequired: () -> Void
     let onMoveToTrash: () -> Void
+    var viewModel: FolderViewModel
+    
+    var isEditing: Bool {
+        viewModel.editingFileID == file.id
+    }
     
     var body: some View {
         VStack(spacing: 8) {
             FileIconView(file: file, baseSize: 64)
-            Text(file.name)
-                .font(.system(size: 12))
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .frame(height: 32, alignment: .top)
+//            Text(file.name)
+//                .font(.system(size: 12))
+//                .lineLimit(2)
+//                .multilineTextAlignment(.center)
+//                .frame(height: 32, alignment: .top)
+            EditableFileNameView(
+                file: file,
+                isEditing: isEditing,
+                onCommit: { newName in
+                    viewModel.renameFile(file: file, to: newName)
+                    viewModel.editingFileID = nil
+                },
+                onCancel: {
+                    viewModel.editingFileID = nil
+                }
+            )
         }
         .padding(10)
         .frame(width: 120, height: 110, alignment: .top)
@@ -438,53 +559,15 @@ struct FileGridItemView: View {
                 )
         )
         .contextMenu {
-            if file.url.pathExtension == "app" {
-                Button(action: onOpenAsDirectory) {
-                    Text("Show Package Contents")
-                    Image(systemName: "folder.badge.gearshape")
-                }
-            }
-            
-            Divider()
-            
-            Button(action: {
-                FileWindowManager.openInfoView(for: file)
-            }) {
-                Text("File Info")
-                Image(systemName: "info.circle")
-            }
-
-            Divider()
-
-            Button(action: onCopy) {
-                Text("Copy File")
-                Image(systemName: "doc.on.doc")
-            }
-            
-            Button(action: onCut) {
-                Text("Cut File")
-                Image(systemName: "arrow.right.doc.on.clipboard")
-            }
-            
-            Divider()
-            
-            Button(action: {
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(file.url.path, forType: .string)
-            }) {
-                Text("Copy File Path")
-                Image(systemName: "doc.on.doc")
-            }
-            
-            Divider()
-            
-            Button(action: onMoveToTrash) {
-                Text("Move to Trash")
-                Image(systemName: "trash")
-            }
-            
-            Divider()
+            FileContextMenu(
+                file: file,
+                viewModel: viewModel,
+                isSelected: isSelected,
+                onOpenAsDirectory: onOpenAsDirectory,
+                onCopy: onCopy,
+                onCut: onCut,
+                onMoveToTrash: onMoveToTrash
+            )
         }
     }
 }
@@ -500,6 +583,7 @@ struct FileListItemView: View {
     let onOpenAsDirectory: () -> Void
     let onRefreshRequired: () -> Void
     let onMoveToTrash: () -> Void
+    let viewModel: FolderViewModel
 
     var body: some View {
         HStack {
@@ -539,44 +623,15 @@ struct FileListItemView: View {
                 )
         )
         .contextMenu {
-            if file.url.pathExtension == "app" {
-                Button(action: onOpenAsDirectory) {
-                    Text("Show Package Contents")
-                    Image(systemName: "folder.badge.gearshape")
-                }
-            }
-
-            Divider()
-
-            Button(action: onCopy) {
-                Text("Copy File")
-                Image(systemName: "doc.on.doc")
-            }
-
-            Button(action: onCut) {
-                Text("Cut File")
-                Image(systemName: "arrow.right.doc.on.clipboard")
-            }
-
-            Divider()
-
-            Button(action: {
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(file.url.path, forType: .string)
-            }) {
-                Text("Copy File Path")
-                Image(systemName: "doc.on.doc")
-            }
-
-            Divider()
-
-            Button(action: onMoveToTrash) {
-                Text("Move to Trash")
-                Image(systemName: "trash")
-            }
-
-            Divider()
+            FileContextMenu(
+                file: file,
+                viewModel: viewModel,
+                isSelected: isSelected,
+                onOpenAsDirectory: onOpenAsDirectory,
+                onCopy: onCopy,
+                onCut: onCut,
+                onMoveToTrash: onMoveToTrash
+            )
         }
     }
 }
@@ -617,7 +672,7 @@ struct InteractivePathTitleView: View {
         .padding(.horizontal, 8)
         .background(isHoveringPath ? Color(NSColor.quaternaryLabelColor) : Color.clear)
         .cornerRadius(4)
-        .frame(minWidth: 140, maxWidth: 320, alignment: .leading)
+        .frame(minWidth: 140, maxWidth: 310, alignment: .leading)
         .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isHoveringPath)
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -653,6 +708,57 @@ struct SoundEffects {
     static func playSoundEffect(name: String) {
         if let sound = NSSound(named: name) {
             sound.play()
+        }
+    }
+}
+
+struct EditableFileNameView: View {
+    let file: FileItem
+    let isEditing: Bool
+    let onCommit: (String) -> Void
+    let onCancel: () -> Void
+    
+    @State private var editedName: String = ""
+    @FocusState private var isFocused: Bool
+    
+    var body: some View {
+        Group {
+            if isEditing {
+                TextField("", text: $editedName)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.accentColor, lineWidth: 1.5)
+                    )
+                    .focused($isFocused)
+                    .onSubmit {
+                        commitChange()
+                    }
+                    .onExitCommand {
+                        onCancel()
+                    }
+                    .onAppear {
+                        editedName = file.url.lastPathComponent
+                        isFocused = true
+                    }
+            } else {
+                Text(file.url.lastPathComponent)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+            }
+        }
+    }
+    
+    private func commitChange() {
+        let trimmed = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty && trimmed != file.url.lastPathComponent {
+            onCommit(trimmed)
+        } else {
+            onCancel()
         }
     }
 }
