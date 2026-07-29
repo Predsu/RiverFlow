@@ -10,6 +10,7 @@ class FolderViewModel {
     var currentSortingOption: FileSortOption = .name
     
     var editingFileID: UUID? = nil
+    var selectedFileIds: Set<UUID> = []
     
     var pasteboardURLs: [URL] = []
     var isOperationCut: Bool = false
@@ -411,6 +412,45 @@ class FolderViewModel {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(hashString, forType: .string)
             }
+        }
+    }
+    
+    func compressToZip(files: [FileItem]) {
+        guard !files.isEmpty else { return }
+        let parentDir = files[0].url.deletingLastPathComponent()
+        
+        let zipName: String
+        if files.count == 1 {
+            zipName = "\(files[0].url.deletingPathExtension().lastPathComponent).zip"
+        } else {
+            zipName = "Archive.zip"
+        }
+        
+            let destinationZipURL = parentDir.appendingPathComponent(zipName)
+            
+            let sourcePaths = files.map { $0.url.lastPathComponent }
+            
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+                process.currentDirectoryURL = parentDir
+                
+                var arguments = ["-r", destinationZipURL.path]
+                arguments.append(contentsOf: sourcePaths)
+                process.arguments = arguments
+            
+            do {
+                try process.run()
+                process.waitUntilExit()
+                
+                DispatchQueue.main.async {
+                    self.loadCurrentDirectory()
+                }
+            } catch {
+                print("Error compressing to ZIP \(error.localizedDescription)")
+            }
+                
+            SoundEffects.playSoundEffect(name: "confirmation")
         }
     }
 }
