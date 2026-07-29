@@ -392,6 +392,111 @@ struct FileIconView: View {
     }
 }
 
+struct FileContextMenu: View {
+    let file: FileItem
+    let viewModel: FolderViewModel
+    let isSelected: Bool
+    let onOpenAsDirectory: () -> Void
+    let onCopy: () -> Void
+    let onCut: () -> Void
+    let onMoveToTrash: () -> Void
+
+    var body: some View {
+        Group {
+            Button(action: {
+                viewModel.openFileWith(file: file)
+            }) {
+                Text("Open File With")
+                Image(systemName: "arrow.up.forward.app")
+            }
+            
+            Button(action: {
+                viewModel.revealInFinder(url: file.url)
+            }) {
+                Text("Reveal in Finder")
+                Image(systemName: "magnifyingglass")
+            }
+            
+            Divider()
+            
+            if file.url.pathExtension == "app" {
+                Button(action: onOpenAsDirectory) {
+                    Text("Show Package Contents")
+                    Image(systemName: "folder.badge.gearshape")
+                }
+                
+                Divider()
+            }
+            
+            Button(action: {
+                FileWindowManager.openInfoView(for: file)
+            }) {
+                Text("File Info")
+                Image(systemName: "info.circle")
+            }
+
+            Divider()
+
+            Button(action: onCopy) {
+                Text("Copy File")
+                Image(systemName: "doc.on.doc")
+            }
+            
+            Button(action: onCut) {
+                Text("Cut File")
+                Image(systemName: "arrow.right.doc.on.clipboard")
+            }
+            
+            Button(action: {
+                viewModel.editingFileID = file.id
+            }) {
+                Text("Rename")
+                Image(systemName: "character.cursor.ibeam")
+            }
+            
+            Button(action: {
+                if isSelected {
+                    let selectedFiles = viewModel.files.filter { viewModel.selectedFileIds.contains($0.id) }
+                    viewModel.compressToZip(files: selectedFiles)
+                } else {
+                    viewModel.compressToZip(files: [file])
+                }
+            }) {
+                Text("Compress to ZIP")
+                Image(systemName: "archivebox")
+            }
+            
+            if viewModel.selectedFileIds.count > 1 && viewModel.selectedFileIds.contains(file.id) {
+                Button(action: {
+                    viewModel.createFolderFromSelection(files: viewModel.selectedFiles)
+                    viewModel.selectedFileIds.removeAll()
+                }) {
+                    Text("Create Folder with Selected")
+                    Image(systemName: "folder.badge.plus")
+                }
+            }
+            
+            Divider()
+            
+            Button(action: {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(file.url.path, forType: .string)
+            }) {
+                Text("Copy File Path")
+                Image(systemName: "doc.on.doc")
+            }
+            
+            Divider()
+            
+            Button(action: onMoveToTrash) {
+                Text("Move to Trash")
+                Image(systemName: "trash")
+            }
+        }
+    }
+}
+
 struct FileGridItemView: View {
     let file: FileItem
     let isSelected: Bool
@@ -454,81 +559,15 @@ struct FileGridItemView: View {
                 )
         )
         .contextMenu {
-            if file.url.pathExtension == "app" {
-                Button(action: onOpenAsDirectory) {
-                    Text("Show Package Contents")
-                    Image(systemName: "folder.badge.gearshape")
-                }
-                
-                Divider()
-            }
-            
-//            Button(action: {
-//                FolderViewModel.copySHA256Checksum(for: file.url)
-//            }) {
-//                Text("Copy SHA256 Checksum")
-//                Image(systemName: "number.square")
-//            }
-//            
-//            Divider()
-            
-            Button(action: {
-                FileWindowManager.openInfoView(for: file)
-            }) {
-                Text("File Info")
-                Image(systemName: "info.circle")
-            }
-
-            Divider()
-
-            Button(action: onCopy) {
-                Text("Copy File")
-                Image(systemName: "doc.on.doc")
-            }
-            
-            Button(action: onCut) {
-                Text("Cut File")
-                Image(systemName: "arrow.right.doc.on.clipboard")
-            }
-            
-            Button(action: {
-                viewModel.editingFileID = file.id
-            }) {
-                Text("Rename")
-                Image(systemName: "character.cursor.ibeam")
-            }
-            
-            Button(action: {
-                if isSelected {
-                    let selectedFiles = viewModel.files.filter { viewModel.selectedFileIds.contains($0.id) }
-                    viewModel.compressToZip(files: selectedFiles)
-                } else {
-                    viewModel.compressToZip(files: [file])
-                }
-            }) {
-                Text("Compress to ZIP")
-                Image(systemName: "archivebox")
-            }
-            
-            Divider()
-            
-            Button(action: {
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(file.url.path, forType: .string)
-            }) {
-                Text("Copy File Path")
-                Image(systemName: "doc.on.doc")
-            }
-            
-            Divider()
-            
-            Button(action: onMoveToTrash) {
-                Text("Move to Trash")
-                Image(systemName: "trash")
-            }
-            
-            Divider()
+            FileContextMenu(
+                file: file,
+                viewModel: viewModel,
+                isSelected: isSelected,
+                onOpenAsDirectory: onOpenAsDirectory,
+                onCopy: onCopy,
+                onCut: onCut,
+                onMoveToTrash: onMoveToTrash
+            )
         }
     }
 }
@@ -544,6 +583,7 @@ struct FileListItemView: View {
     let onOpenAsDirectory: () -> Void
     let onRefreshRequired: () -> Void
     let onMoveToTrash: () -> Void
+    let viewModel: FolderViewModel
 
     var body: some View {
         HStack {
@@ -583,44 +623,15 @@ struct FileListItemView: View {
                 )
         )
         .contextMenu {
-            if file.url.pathExtension == "app" {
-                Button(action: onOpenAsDirectory) {
-                    Text("Show Package Contents")
-                    Image(systemName: "folder.badge.gearshape")
-                }
-            }
-
-            Divider()
-
-            Button(action: onCopy) {
-                Text("Copy File")
-                Image(systemName: "doc.on.doc")
-            }
-
-            Button(action: onCut) {
-                Text("Cut File")
-                Image(systemName: "arrow.right.doc.on.clipboard")
-            }
-
-            Divider()
-
-            Button(action: {
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(file.url.path, forType: .string)
-            }) {
-                Text("Copy File Path")
-                Image(systemName: "doc.on.doc")
-            }
-
-            Divider()
-
-            Button(action: onMoveToTrash) {
-                Text("Move to Trash")
-                Image(systemName: "trash")
-            }
-
-            Divider()
+            FileContextMenu(
+                file: file,
+                viewModel: viewModel,
+                isSelected: isSelected,
+                onOpenAsDirectory: onOpenAsDirectory,
+                onCopy: onCopy,
+                onCut: onCut,
+                onMoveToTrash: onMoveToTrash
+            )
         }
     }
 }

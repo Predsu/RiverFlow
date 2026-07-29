@@ -9,6 +9,73 @@ private struct FileFramePreferenceKey: PreferenceKey {
     }
 }
 
+struct GridContextMenu: View {
+    let viewModel: FolderViewModel
+
+    var body: some View {
+        Button(action: { viewModel.pasteFiles() }) {
+            Text("Paste File")
+            Image(systemName: "doc.on.clipboard.fill")
+        }
+        
+        Divider()
+        
+        Button(action: {
+            viewModel.openInTerminal(url: viewModel.currentDir)
+        }) {
+            Text("Open in Terminal")
+            Image(systemName: "apple.terminal")
+        }
+        
+        Button(action: {
+            viewModel.openInVSCode(url: viewModel.currentDir)
+        }) {
+            Text("Open in VSCode")
+            Image(systemName: "chevron.left.forwardslash.chevron.right")
+        }
+        
+        Divider()
+        
+        Button(action: {
+            viewModel.createNewDirectory()
+        }) {
+            Text("Create Folder")
+            Image(systemName: "folder.badge.plus")
+        }
+        
+        Button(action: {
+            viewModel.createNewFile()
+        }) {
+            Text("Create File")
+            Image(systemName: "doc.badge.plus")
+        }
+        
+        if viewModel.selectedFileIds.count > 1 {
+            Button("Create Folder with Selected") {
+                viewModel.createFolderFromSelection(files: viewModel.selectedFiles)
+            }
+        }
+        
+        Divider()
+        
+        Button(action: {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(viewModel.currentDir.path, forType: .string)
+        }) {
+            Text("Copy Current Directory Path")
+            Image(systemName: "doc.on.doc")
+        }
+        
+        Button(action: {
+            viewModel.copyShellEscapedPath(for: viewModel.currentDir)
+        }) {
+            Text("Copy Shell-Formatted Dir Path")
+            Image(systemName: "doc.on.doc")
+        }
+    }
+}
+
 struct ContentView: View {
     @Environment(\.undoManager) private var undoManager
     @State private var viewModel = FolderViewModel()
@@ -26,10 +93,6 @@ struct ContentView: View {
     let gridCols = [
         GridItem(.adaptive(minimum: 130), spacing: 16)
     ]
-    
-    private var selectedFiles: [FileItem] {
-        viewModel.files.filter { viewModel.selectedFileIds.contains($0.id) }
-    }
     
     private func handleTap(for file: FileItem, in list: [FileItem]) {
         let modifiers = NSEvent.modifierFlags
@@ -170,13 +233,13 @@ struct ContentView: View {
             }
         }
         .onCommand(#selector(NSText.copy(_:))) {
-            if !selectedFiles.isEmpty {
-                viewModel.copyFiles(files: selectedFiles)
+            if !viewModel.selectedFiles.isEmpty {
+                viewModel.copyFiles(files: viewModel.selectedFiles)
             }
         }
         .onCommand(#selector(NSText.cut(_:))) {
-            if !selectedFiles.isEmpty {
-                viewModel.cutFiles(files: selectedFiles)
+            if !viewModel.selectedFiles.isEmpty {
+                viewModel.cutFiles(files: viewModel.selectedFiles)
             }
         }
         .onCommand(#selector(NSText.paste(_:))) {
@@ -207,10 +270,10 @@ struct ContentView: View {
                             }
                         },
                         onCopy: {
-                            viewModel.copyFiles(files: selectedFiles)
+                            viewModel.copyFiles(files: viewModel.selectedFiles)
                         },
                         onCut: {
-                            viewModel.cutFiles(files: selectedFiles)
+                            viewModel.cutFiles(files: viewModel.selectedFiles)
                         },
                         onOpenAsDirectory: {
                             viewModel.enterDirectory(dir: file)
@@ -220,10 +283,11 @@ struct ContentView: View {
                             viewModel.loadCurrentDirectory()
                         },
                         onMoveToTrash: {
-                            let filesToTrash = viewModel.selectedFileIds.contains(file.id) ? selectedFiles : [file]
+                            let filesToTrash = viewModel.selectedFileIds.contains(file.id) ? viewModel.selectedFiles : [file]
                             viewModel.moveToTrash(files: filesToTrash)
                             viewModel.selectedFileIds.removeAll()
-                        }
+                        },
+                        viewModel: viewModel
                     )
             }
         }
@@ -253,10 +317,10 @@ struct ContentView: View {
                             }
                         },
                         onCopy: {
-                            viewModel.copyFiles(files: selectedFiles)
+                            viewModel.copyFiles(files: viewModel.selectedFiles)
                         },
                         onCut: {
-                            viewModel.cutFiles(files: selectedFiles)
+                            viewModel.cutFiles(files: viewModel.selectedFiles)
                         },
                         onOpenAsDirectory: {
                             viewModel.enterDirectory(dir: file)
@@ -266,7 +330,7 @@ struct ContentView: View {
                             viewModel.loadCurrentDirectory()
                         },
                         onMoveToTrash: {
-                            let filesToTrash = viewModel.selectedFileIds.contains(file.id) ? selectedFiles : [file]
+                            let filesToTrash = viewModel.selectedFileIds.contains(file.id) ? viewModel.selectedFiles : [file]
                             viewModel.moveToTrash(files: filesToTrash)
                             viewModel.selectedFileIds.removeAll()
                         },
@@ -341,60 +405,7 @@ struct ContentView: View {
 //            viewModel.selectedFileIds.removeAll()
 //        }
         .contextMenu {
-            Button(action: { viewModel.pasteFiles() }) {
-                Text("Paste File")
-                Image(systemName: "doc.on.clipboard.fill")
-            }
-            
-            Divider()
-            
-            Button(action: {
-                viewModel.openInTerminal(url: viewModel.currentDir)
-            }) {
-                Text("Open in Terminal")
-                Image(systemName: "apple.terminal")
-            }
-            
-            Button(action: {
-                viewModel.openInVSCode(url: viewModel.currentDir)
-            }) {
-                Text("Open in VSCode")
-                Image(systemName: "chevron.left.forwardslash.chevron.right")
-            }
-            
-            Divider()
-            
-            Button(action: {
-                viewModel.createNewDirectory()
-            }) {
-                Text("Create Folder")
-                Image(systemName: "folder.badge.plus")
-            }
-            
-            Button(action: {
-                viewModel.createNewFile()
-            }) {
-                Text("Create File")
-                Image(systemName: "doc.badge.plus")
-            }
-            
-            Divider()
-            
-            Button(action: {
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(viewModel.currentDir.path, forType: .string)
-            }) {
-                Text("Copy Current Directory Path")
-                Image(systemName: "doc.on.doc")
-            }
-            
-            Button(action: {
-                viewModel.copyShellEscapedPath(for: viewModel.currentDir)
-            }) {
-                Text("Copy Shell-Formatted Dir Path")
-                Image(systemName: "doc.on.doc")
-            }
+            GridContextMenu(viewModel: viewModel)
         }
         .onChange(of: selectedSideBarItem) { _, newValue in
             if let newSection = newValue {
