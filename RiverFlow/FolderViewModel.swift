@@ -1,12 +1,17 @@
 import Foundation
 import Observation
 import AppKit
+import CryptoKit
+import UniformTypeIdentifiers
 
 @Observable
 class FolderViewModel {
     var currentDir: URL
     var files: [FileItem] = []
     var currentSortingOption: FileSortOption = .name
+    
+    var editingFileID: UUID? = nil
+    var selectedFileIds: Set<UUID> = []
     
     var pasteboardURLs: [URL] = []
     var isOperationCut: Bool = false
@@ -30,6 +35,10 @@ class FolderViewModel {
     
     var currentDirName: String {
         return currentDir.path == "/" ? "/" : currentDir.lastPathComponent
+    }
+    
+    var selectedFiles: [FileItem] {
+        files.filter { selectedFileIds.contains($0.id) }
     }
     
     init(startDir: URL = URL(fileURLWithPath: NSHomeDirectory())) {
@@ -216,6 +225,20 @@ class FolderViewModel {
         pasteboard.writeObjects(files.map { $0.url as NSURL})
     }
     
+    func renameFile(file: FileItem, to newName: String) {
+        let trimmedNewName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedNewName.isEmpty, trimmedNewName != file.url.lastPathComponent else { return }
+        
+        let destinationURL = file.url.deletingLastPathComponent().appendingPathComponent(trimmedNewName)
+        
+        do {
+            try FileManager.default.moveItem(at: file.url, to: destinationURL)
+            loadCurrentDirectory()
+        } catch {
+            print("Error renaming file \(error.localizedDescription)")
+        }
+    }
+    
     func moveToTrash(files: [FileItem]) {
         var restorePairs: [(trashed: URL, original: URL)] = []
         for file in files {
@@ -354,6 +377,139 @@ class FolderViewModel {
             }
             target.loadCurrentDirectory()
             target.registerPasteUndo(pastedPairs: pastedPairs, wasCut: wasCut)
+        }
+    }
+    
+    func openInTerminal(url: URL) {
+        let terminalBundleID = "com.apple.Terminal"
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: terminalBundleID) {
+            let configuration = NSWorkspace.OpenConfiguration()
+            NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: configuration)
+        } else {
+            print("Terminal not found.")
+        }
+    }
+
+    func openInVSCode(url: URL) {
+        let vscodeBundleID = "com.microsoft.VSCode"
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: vscodeBundleID) {
+            let configuration = NSWorkspace.OpenConfiguration()
+            NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: configuration)
+        } else {
+            print("VS Code not found.")
+        }
+    }
+    
+    func copyShellEscapedPath(for url: URL) {
+        let escapedPath = url.path.replacingOccurrences(of: " ", with: "\\ ")
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(escapedPath, forType: .string)
+    }
+    
+    static func copySHA256Checksum(for fileURL: URL) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let data = try? Data(contentsOf: fileURL) else { return }
+            let hash = SHA256.hash(data: data)
+            let hashString = hash.compactMap { String(format: "%02x", $0) }.joined()
+            
+            DispatchQueue.main.async {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(hashString, forType: .string)
+            }
+        }
+    }
+    
+    func compressToZip(files: [FileItem]) {
+        guard !files.isEmpty else { return }
+        let parentDir = files[0].url.deletingLastPathComponent()
+        
+        let zipName: String
+        if files.count == 1 {
+            zipName = "\(files[0].url.deletingPathExtension().lastPathComponent).zip"
+        } else {
+            zipName = "Archive.zip"
+        }
+        
+            let destinationZipURL = parentDir.appendingPathComponent(zipName)
+            
+            let sourcePaths = files.map { $0.url.lastPathComponent }
+            
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+                process.currentDirectoryURL = parentDir
+                
+                var arguments = ["-r", destinationZipURL.path]
+                arguments.append(contentsOf: sourcePaths)
+                process.arguments = arguments
+            
+            do {
+                try process.run()
+                process.waitUntilExit()
+                
+                DispatchQueue.main.async {
+                    self.loadCurrentDirectory()
+                }
+            } catch {
+                print("Error compressing to ZIP \(error.localizedDescription)")
+            }
+                
+            SoundEffects.playSoundEffect(name: "confirmation")
+        }
+    }
+    
+    func openFileWith(file: FileItem) {
+        let panel = NSOpenPanel()
+        panel.title = "Select app used to open the file"
+        panel.prompt = "Open"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        if #available(macOS 11.0, *) {
+            panel.allowedContentTypes = [.application, .applicationBundle]
+        } else {
+            panel.allowedFileTypes = ["app"]
+        }
+        panel.begin { response in
+            guard response == .OK, let appURL = panel.url else { return }
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            NSWorkspace.shared.open([file.url], withApplicationAt: appURL, configuration: configuration) { runningApp, error in
+                if let error = error {
+                    print("Error opening file: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    func revealInFinder(url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+    
+    func createFolderFromSelection(files: [FileItem]) {
+        guard !files.isEmpty else { return }
+        let fileManager = FileManager.default
+        
+        let baseFolderURL = currentDir.appendingPathComponent("New Folder")
+        var uniqueFolderURL = baseFolderURL
+        var counter = 1
+        while fileManager.fileExists(atPath: uniqueFolderURL.path) {
+            uniqueFolderURL = currentDir.appendingPathComponent("New Folder \(counter)")
+            counter += 1
+        }
+        
+        do {
+            try fileManager.createDirectory(at: uniqueFolderURL, withIntermediateDirectories: true)
+            for file in files {
+                let destination = uniqueFolderURL.appendingPathComponent(file.url.lastPathComponent)
+                try fileManager.moveItem(at: file.url, to: destination)
+            }
+            
+            loadCurrentDirectory()
+        } catch {
+            print("Error creating folder from selection: \(error.localizedDescription)")
         }
     }
 }
