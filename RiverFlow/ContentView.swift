@@ -392,6 +392,15 @@ struct ContentView: View {
                             dropTargetedFileId = targeted ? file.id : nil
                         }
                     }
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear
+                                .preference(
+                                    key: FileFramePreferenceKey.self,
+                                    value: [file.id: geo.frame(in: .named("fileGridArea"))]
+                                )
+                        }
+                    )
                 }
             }
             .padding()
