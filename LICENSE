@@ -1,0 +1,647 @@
+# RADOMIR KUKLA NON-COMMERCIAL SOURCE LICENSE 1.1
+
+**Version 1.1**  
+**Effective Date:** August 1st 2026 (1.08.2026)
+
+Copyright 2026 Radomir Kukla and the respective contributors.
+
+This license governs use of the Source Code of RiverFlow.
+
+This is a source-available, non-commercial, reciprocal license. It is not the GNU General Public License, is not compatible with the GNU General Public License, and should not be represented as an Open Source Initiative approved license.
+
+---
+
+## 1. Acceptance
+
+By accessing, downloading, copying, compiling, modifying, distributing, publishing, or otherwise exercising any right granted under this License, You agree to be bound by its terms.
+
+If You do not agree to this License, You may inspect the repository only to the extent permitted without acceptance under applicable law, but You may not exercise any right that requires permission from a copyright holder.
+
+---
+
+## 2. Definitions
+
+### 2.1. Licensor
+"Licensor" means Radomir Kukla with respect to the Original Work and, with respect to a Contribution, the person or legal entity that lawfully submits that Contribution under this License.
+
+### 2.2. You
+"You" means the individual or legal entity exercising rights under this License.
+
+### 2.3. Original Work
+"Original Work" means the Source Code and related materials first made available by Radomir Kukla under this License.
+
+### 2.4. Source Code
+"Source Code" means the preferred form of the Work for making modifications, including, where applicable:
+
+1. program source files;
+2. build scripts;
+3. project and configuration files;
+4. interface definitions;
+5. scripts used to control compilation and installation;
+6. source assets required to create the Work;
+7. documentation included in the repository;
+8. dependency manifests and lock files; and
+9. other materials reasonably necessary to build, study, test, modify, or distribute the Work.
+
+Source Code does not include third-party materials that are clearly identified as being governed by a separate license.
+
+### 2.5. Object Code
+"Object Code" means any non-source form of the Work, including executables, binaries, libraries, installers, packages, archives, bytecode, intermediate code, and compiled assets.
+
+### 2.6. Work
+"Work" means the Original Work, any Modified Work, any Contribution, and any covered portion of them.
+
+### 2.7. Modified Work
+"Modified Work" means any work based upon, derived from, adapted from, incorporating, linking with, or modifying all or any copyrightable portion of the Work, where permission from a copyright holder would be required under applicable law.
+
+Mere aggregation of independent and separate works on the same storage medium or distribution service does not, by itself, create a Modified Work.
+
+### 2.8. Fork
+"Fork" means a publicly or privately maintained copy of the repository that has been separated from, derived from, or developed independently of the Original Repository.
+
+### 2.9. Original Repository
+"Original Repository" means the repository designated by the Licensor as the primary official source-code repository for the Original Work.
+
+### 2.10. Contribution
+"Contribution" means any intentional submission of source code, documentation, assets, patches, commits, pull requests, or other copyrightable material intended for inclusion in the Work.
+
+### 2.11. Contributor
+"Contributor" means a person or legal entity that submits a Contribution included in the Work.
+
+### 2.12. Distribution
+"Distribute" or "Distribution" means to provide, publish, transmit, communicate, host, share, sublicense, or otherwise make a copy of the Work available to any third party.
+
+Distribution includes making the Work available through a public repository, private repository accessible by third parties, download service, package registry, application store, network service, or physical medium.
+
+### 2.13. Non-Commercial Purpose
+"Non-Commercial Purpose" means a purpose that is exclusively personal, educational, academic, private, hobbyist, archival, preservation-oriented, or otherwise not commercial in nature.
+
+A purpose is not a Non-Commercial Purpose if it is directly or indirectly connected to a commercial activity, commercial benefit, or for-profit business operation.
+
+### 2.14. Commercial Use
+"Commercial Use" means any use of the Work that is not exclusively for a Non-Commercial Purpose.
+
+Commercial Use includes, without limitation, any use of the Work:
+
+1. to generate revenue, reduce costs, support sales, improve a business, or obtain commercial advantage;
+2. by, for, on behalf of, or in support of a for-profit business;
+3. in connection with a product, service, platform, app, game, website, tool, or offering that is sold, licensed, subscribed to, sponsored, monetized, or otherwise made available for commercial benefit;
+4. in internal business operations, research, development, testing, quality assurance, deployment, security review, training, support, consulting, integration, maintenance, or demonstration for a business or client;
+5. to provide paid services, including hosting, software-as-a-service, managed service, consulting, development, customization, support, integration, or maintenance;
+6. to fulfill work performed for compensation, whether for a client, employer, contractor, or other paying party;
+7. to market, promote, validate, improve, or operate another commercial product or service;
+8. in exchange for payment, fees, subscriptions, advertising, sponsorship, paid memberships, paid access, or commercial data collection; or
+9. in any distribution or publication intended to support or promote a commercial activity.
+
+Receiving voluntary donations that are not required in exchange for access to the Work does not, by itself, constitute Commercial Use, provided that the Work is not otherwise used for commercial advantage and no paid feature, access tier, benefit, or service is offered in return.
+
+### 2.15. Corresponding Source
+"Corresponding Source" means all Source Code needed to generate, install, execute, understand, test, and modify a distributed version of the Work, including the scripts and configuration files used to control those activities.
+
+Corresponding Source includes, to the extent part of the Work:
+
+1. the complete Source Code of the version being distributed;
+2. build scripts and packaging scripts;
+3. configuration files;
+4. lock files and dependency manifests;
+5. source assets and other materials needed to rebuild the distributed version; and
+6. documentation reasonably necessary to build, install, and modify the Work.
+
+Corresponding Source does not include general-purpose tools or system components normally available independently of the Work, unless those tools or components are themselves part of the Work.
+
+### 2.16. Complete Contributor Record
+"Complete Contributor Record" means a reasonably accurate record identifying all Contributors credited in the Original Repository up to the applicable Synchronization Date.
+
+The record should include, where available in the Original Repository:
+
+- names or established pseudonyms;
+- contribution attributions;
+- relevant copyright notices;
+- authorship information preserved in the repository;
+- the date or commit used as the attribution snapshot; and
+- a reference to the Original Repository.
+
+No Contributor is required to disclose a legal name, email address, or other personal information that the Contributor did not publicly use for attribution.
+
+### 2.17. Synchronization Date
+"Synchronization Date" means:
+
+1. for a Fork that does not later incorporate changes from the Original Repository, the date or commit at which the Fork was created or last synchronized;
+2. for a Fork that later merges, rebases, cherry-picks, copies, or otherwise incorporates changes from the Original Repository, the date or commit of the most recent such incorporation; or
+3. for another Modified Work, the latest date or commit from the Original Repository whose content is included in that Modified Work.
+
+---
+
+## 3. Grant of Copyright License
+
+Subject to all terms and conditions of this License, each Licensor grants You a worldwide, royalty-free, non-exclusive, non-transferable except as expressly permitted by this License, and non-sublicensable except through Distribution under this License, copyright license to:
+
+1. access and inspect the Source Code;
+2. reproduce the Work;
+3. download and store copies of the Work;
+4. compile the Source Code;
+5. execute privately compiled versions of the Work;
+6. study, test, debug, and evaluate the Work;
+7. modify the Work;
+8. create Modified Works and Forks; and
+9. Distribute the Source Code and non-commercial Modified Works,
+
+in every case exclusively for Non-Commercial Purposes and subject to the requirements of this License.
+
+No right is granted for Commercial Use.
+
+---
+
+## 4. Grant of Patent License
+
+Subject to the terms of this License, each Contributor grants You a worldwide, royalty-free, non-exclusive patent license under patent claims that the Contributor can license and that would necessarily be infringed by the Contributor's Contribution alone or by combination of that Contribution with the Work as submitted.
+
+This patent license permits You to make, use, modify, and Distribute the Work exclusively for Non-Commercial Purposes.
+
+No patent license is granted for:
+
+1. Commercial Use;
+2. claims infringed solely because of further modifications made by another person;
+3. combinations with other products or technologies not submitted by the Contributor; or
+4. patent rights the Contributor does not have authority to license.
+
+If You initiate patent litigation alleging that the Work or a Contribution infringes a patent, any patent license granted to You under this section terminates as of the date the proceeding is initiated.
+
+---
+
+## 5. Permitted Non-Commercial Use
+
+Subject to this License, You may use the Work for activities such as:
+
+1. personal study and education;
+2. private experimentation;
+3. non-commercial hobby projects;
+4. security research conducted lawfully and without an anticipated commercial application;
+5. academic research that is not performed as part of a commercial engagement;
+6. non-commercial archival and preservation;
+7. development of non-commercial Forks;
+8. non-commercial community collaboration; and
+9. publication of non-commercial Modified Works in compliance with Section 7.
+
+The fact that an organization is described as educational, charitable, governmental, public-interest, or non-profit does not automatically make every use Non-Commercial. The actual purpose, context, funding arrangement, and benefit of the use must be considered.
+
+---
+
+## 6. Commercial Use Prohibited
+
+Unless You have obtained a separate written commercial license from Radomir Kukla and any other necessary rights holders, You may not:
+
+1. make any Commercial Use of the Work;
+2. sell or license the Work, Source Code, Object Code, a Modified Work, or a Fork;
+3. charge a fee for access to the Work;
+4. use the Work in a commercial product or commercial project;
+5. distribute the Work as part of a commercial product, service, or transaction;
+6. use the Work to provide paid hosting, software-as-a-service, consulting, support, development, integration, maintenance, or other paid services;
+7. use the Work internally for the operation or benefit of a for-profit business;
+8. use the Work in work performed for compensation;
+9. monetize the Work through advertising, sponsorship, paid memberships, subscriptions, paid downloads, paid access, commercial data collection, or similar means;
+10. use the Work to develop, improve, test, validate, support, or operate a product or service intended for Commercial Use; or
+11. authorize, assist, or enable a third party to do anything prohibited by this section.
+
+Publication of Source Code without charging a direct fee does not make the use Non-Commercial where the publication forms part of, supports, promotes, or benefits a commercial activity.
+
+---
+
+## 7. Distribution of Source Code and Forks
+
+You may Distribute the Work or a Fork only where all of the following conditions are satisfied.
+
+### 7.1. Same-License Requirement
+The entire Modified Work or Fork, to the extent governed by this License, must be licensed as a whole under this exact version of the Radomir Kukla Non-Commercial Source License.
+
+You may not replace this License with another license or offer recipients the Work under alternative terms unless You have separate written authorization from every relevant rights holder.
+
+This requirement does not override separate licenses governing identified third-party components.
+
+### 7.2. Complete Source Requirement
+You must provide the complete Corresponding Source of the version You Distribute.
+
+The Corresponding Source must be provided:
+
+1. together with the distributed Work;
+2. through a repository or download location accessible without charge;
+3. in a commonly used, editable, machine-readable format; and
+4. without technological measures that prevent recipients from copying, modifying, or rebuilding the Source Code as permitted by this License.
+
+A source-code offer that depends on payment, mandatory registration, a non-disclosure agreement, or acceptance of additional restrictions does not satisfy this requirement.
+
+### 7.3. License Copy
+You must include an unmodified copy of this License with every distributed copy of the Work.
+
+### 7.4. Copyright and Attribution Notices
+You must preserve all copyright notices, authorship notices, license notices, disclaimer notices, and Contributor attributions contained in the Work.
+
+You may add notices identifying Your own modifications and Contributions, but You may not remove, misrepresent, or obscure existing notices except to correct a demonstrable factual error.
+
+### 7.5. Modification Notices
+You must prominently state that You modified the Work.
+
+The notice must include:
+
+1. a reasonable description of the modifications;
+2. the date or date range of the modifications;
+3. the identity or established pseudonym of the modifying Contributor;
+4. the version, commit, or release from which the Modified Work was derived; and
+5. a statement that the Modified Work is not an official release of the original Licensor unless the Licensor expressly authorized that representation.
+
+A version-control history may satisfy this requirement if it remains available with the distributed Source Code and contains the required information.
+
+### 7.6. Preservation of Source History
+You must preserve the available version-control history inherited from the Original Repository up to the point of separation or synchronization, to the extent reasonably practicable.
+
+You may not intentionally rewrite, truncate, erase, falsify, or replace inherited history for the purpose of concealing authorship, origin, copyright ownership, or earlier Contributions.
+
+Ordinary repository maintenance, including rebasing, squashing, migration between version-control systems, removal of accidentally committed secrets, compliance with data-protection law, or correction of unlawful content, is permitted, provided that equivalent attribution and provenance records are preserved where reasonably possible.
+
+### 7.7. Contributor Record
+Every distributed Fork or Modified Work must contain a clearly visible file named:
+
+**CONTRIBUTORS-ORIGINAL.md**
+
+or another equivalently prominent file expressly designated by the Licensor.
+
+That file must contain the Complete Contributor Record current as of the applicable Synchronization Date.
+
+At minimum, it must identify:
+
+1. the Original Repository;
+2. the Synchronization Date;
+3. the corresponding original commit, tag, or version, where available;
+4. all Contributors credited in the Original Repository up to that point;
+5. all copyright notices and attribution statements required by the Original Repository; and
+6. a statement that later Contributors to the Original Repository may not be represented because the Fork diverged or ceased synchronization on the stated date.
+
+### 7.8. Updating the Contributor Record
+If You later incorporate any changes from the Original Repository, You must update the Complete Contributor Record to include Contributors credited for all incorporated changes up to the new Synchronization Date.
+
+You are not required to continuously monitor or add Contributors whose Contributions were made to the Original Repository after the Fork permanently diverged and whose work has not been incorporated into the Fork.
+
+You may not falsely imply that a Contributor endorses, maintains, supports, or participates in Your Fork.
+
+### 7.9. Fork Contributor Record
+You must also maintain a record of Contributors to Your Fork or Modified Work from the point of divergence onward.
+
+The original and Fork-specific Contributor records may be kept in the same file, provided that the distinction between:
+
+- Contributors inherited from the Original Repository; and
+- Contributors who contributed after divergence
+
+is clear and accurate.
+
+### 7.10. No Additional Restrictions
+You may not impose any additional contractual, legal, or technological restriction that prevents recipients from exercising the non-commercial rights granted under this License.
+
+You may not require recipients to:
+
+1. pay a license fee;
+2. enter into a non-disclosure agreement;
+3. accept a license that contradicts this License;
+4. waive rights granted by this License; or
+5. use a particular distribution platform.
+
+Reasonable technical requirements necessary to access a hosting service, such as basic account creation, are permitted only where access to the Source Code remains free and the requirements do not materially restrict the rights granted under this License.
+
+### 7.11. Fork Identification
+A Fork must use a name or description that reasonably distinguishes it from the official Work.
+
+You must not state or imply that the Fork is:
+
+- an official release;
+- endorsed by the Licensor;
+- maintained by the Licensor; or
+- affiliated with the Original Repository,
+
+unless the Licensor has provided prior written permission.
+
+---
+
+## 8. Distribution of Object Code
+
+You may Distribute Object Code compiled from the Work only for Non-Commercial Purposes and only if:
+
+1. You comply with all requirements of Section 7;
+2. You provide the complete Corresponding Source under this License;
+3. the Object Code is clearly identified as an unofficial build unless distributed by the Licensor;
+4. You do not charge for the Object Code or access to it;
+5. You do not use the Object Code to support or promote Commercial Use;
+6. You preserve required legal and attribution notices; and
+7. You do not use the Licensor's trademarks, logos, store artwork, official product packaging, signing keys, certificates, or branding in a manner likely to cause confusion.
+
+Object Code created by a third party is not an Official Binary.
+
+---
+
+## 9. Network Use
+
+Making the Work or a Modified Work available for interaction over a network constitutes Distribution for purposes of this License where:
+
+1. third parties can access material functionality of the Work;
+2. the Work is operated as a hosted application, server, platform, service, or software-as-a-service system; and
+3. the operator has modified the Work or would otherwise be required to provide Corresponding Source under this License.
+
+In such a case, the operator must provide all users interacting with the Work through the network a prominent and reasonably accessible link to the complete Corresponding Source of the deployed version.
+
+Network use remains prohibited where it constitutes Commercial Use.
+
+---
+
+## 10. Separate and Independent Works
+
+This License does not govern a separate and independent work merely because that work:
+
+1. communicates with the Work through a documented, language-neutral, or generally available protocol;
+2. is stored on the same medium;
+3. is distributed through the same repository or package;
+4. invokes the Work as a separate process; or
+5. uses an interface without incorporating copyrightable portions of the Work.
+
+However, a work is not separate and independent merely because it is placed in a different file, process, module, package, repository, or technical layer.
+
+Whether a work is a Modified Work depends on applicable copyright law and the substance of the relationship between the works.
+
+---
+
+## 11. Third-Party Components
+
+This License applies only to material that is expressly made available under it.
+
+Third-party components remain governed by their respective licenses.
+
+Where a third-party license grants rights or imposes obligations concerning a third-party component, that license controls with respect to that component.
+
+You are responsible for determining whether the Work may lawfully be combined or distributed with third-party material.
+
+---
+
+## 12. Contributions
+
+Unless a separate written contribution agreement applies, by intentionally submitting a Contribution for inclusion in the Work, You represent that:
+
+1. You have the legal authority to submit the Contribution;
+2. the Contribution is Your original work or You have sufficient permission to submit it;
+3. the Contribution does not knowingly include material that cannot lawfully be distributed under this License;
+4. You license the Contribution under this License;
+5. You grant the copyright and patent rights described in Sections 3 and 4 with respect to the Contribution; and
+6. You understand that the Contribution may remain publicly available and may be included in non-commercial Forks under this License.
+
+Submitting a Contribution does not transfer copyright ownership to Radomir Kukla unless the Contributor separately agrees to a written copyright assignment.
+
+### 12.1. Commercial Relicensing of Contributions
+Unless otherwise agreed in writing, the Contributor License Agreement contained in Section 12.2 applies to every accepted Contribution.
+
+If a separate written agreement grants broader rights, that separate agreement shall prevail to the extent of the conflict.
+
+### 12.2. Default Contributor License Agreement
+
+Unless otherwise expressly agreed in writing by the Licensor, by intentionally submitting a Contribution for inclusion in the Original Repository, including but not limited to a pull request, patch, commit, issue attachment, or other submission, the Contributor automatically grants the Licensor the following additional rights with respect to that Contribution:
+
+1. a perpetual, worldwide, irrevocable, non-exclusive, royalty-free license;
+2. the right to reproduce, modify, adapt, translate, merge, and distribute the Contribution;
+3. the right to include the Contribution in Official Binaries;
+4. the right to distribute Official Binaries containing the Contribution under any commercial or non-commercial license;
+5. the right to sublicense the Contribution as part of the Project;
+6. the right to relicense the Contribution as part of the Project under separate commercial licenses;
+7. the right to use, reproduce, modify, and distribute the Contribution in future versions of the Project.
+
+The Contributor retains ownership of the copyright to the Contribution.
+
+Nothing in this section transfers copyright ownership to the Licensor.
+
+This Contributor License Agreement applies automatically upon submission of a Contribution unless the Contribution is expressly rejected by the Licensor.
+
+A commercial license covering the entire Work may therefore require permission from all relevant rights holders.
+
+---
+
+## 13. Separate Commercial License
+
+Commercial Use is available only under a separate written commercial license issued by Radomir Kukla and, where necessary, other relevant rights holders.
+
+A commercial license may grant rights to:
+
+1. use the Source Code commercially;
+2. include the Work in a commercial product or project;
+3. sell or sublicense compiled versions;
+4. operate paid or monetized hosted services;
+5. distribute under different terms;
+6. keep modifications private; or
+7. use official branding or other protected materials.
+
+No commercial rights arise from:
+
+- sending a request;
+- negotiating terms;
+- submitting a Contribution;
+- purchasing an Official Binary; or
+- receiving no response from the Licensor.
+
+A commercial license is effective only when expressly granted in a written agreement by a person authorized to grant the relevant rights.
+
+Nothing in this License limits the Licensor's right to commercially distribute Official Binaries containing Contributions licensed under Section 12.2.
+
+Commercial licensing inquiries may be sent to:
+
+- email address: kuklaradek1@gmail.com
+
+---
+
+## 14. Official Binaries and Branding
+
+This License does not grant permission to redistribute Official Binaries.
+
+Official Binaries remain governed by their applicable EULA.
+
+This License does not grant rights to use:
+
+1. the Licensor's trademarks;
+2. official logos;
+3. official store artwork;
+4. official product descriptions;
+5. official signing keys or certificates;
+6. domain names;
+7. social-media identities; or
+8. branding that could cause confusion regarding origin, sponsorship, or endorsement.
+
+You may make truthful, nominative references to the Original Work where reasonably necessary to describe the origin or compatibility of a Fork.
+
+---
+
+## 15. Compliance Information
+
+If You publicly Distribute a Fork or Modified Work, You must provide a reasonable method through which recipients can obtain:
+
+1. the complete Corresponding Source;
+2. this License;
+3. attribution information;
+4. the modification record;
+5. the Complete Contributor Record; and
+6. contact information for reporting apparent license-compliance issues.
+
+You are not required to publish private residential addresses, private telephone numbers, or other unnecessary personal data.
+
+---
+
+## 16. Termination
+
+Your rights under this License terminate automatically if You materially violate its terms.
+
+Where the violation is capable of remedy, Your rights are provisionally reinstated if:
+
+1. You cease the violation;
+2. You correct the violation in full;
+3. You notify affected recipients where reasonably necessary; and
+4. You complete the correction within thirty days after discovering the violation or receiving written notice.
+
+The reinstatement becomes permanent if the relevant Licensor does not notify You of a continuing material violation within sixty days after receiving adequate notice of the correction.
+
+Automatic reinstatement is not available for repeated deliberate Commercial Use, intentional removal of authorship information, knowing copyright infringement, or fraudulent representation of an unofficial build as official, unless the affected rights holder expressly agrees otherwise in writing.
+
+Termination does not affect licenses already validly granted by You to recipients who remain in compliance with this License.
+
+---
+
+## 17. Enforcement and Equitable Relief
+
+Unauthorized Commercial Use or Distribution may cause harm that cannot be adequately remedied by monetary damages alone.
+
+Subject to applicable law, a rights holder may seek injunctive relief, removal of infringing distributions, recovery of damages, or any other remedy available under law.
+
+Nothing in this section predetermines the amount of damages or excludes any defenses available under applicable law.
+
+---
+
+## 18. Disclaimer of Warranty
+
+To the fullest extent permitted by applicable law, the Work is provided as is and as available, without warranties or conditions of any kind, whether express, implied, or statutory.
+
+The Licensors and Contributors disclaim warranties including merchantability, fitness for a particular purpose, title, non-infringement, accuracy, security, compatibility, and absence of defects.
+
+You bear the entire risk of using, modifying, compiling, or distributing the Work.
+
+Nothing in this section excludes rights or liabilities that cannot lawfully be excluded.
+
+---
+
+## 19. Limitation of Liability
+
+To the fullest extent permitted by applicable law, no Licensor or Contributor shall be liable for indirect, special, incidental, consequential, exemplary, or punitive damages, or for loss of data, profits, revenue, goodwill, business opportunities, or anticipated savings arising from the Work or this License.
+
+Where liability cannot be excluded entirely, each Licensor's or Contributor's aggregate liability shall not exceed the greater of:
+
+1. the amount paid by You directly to that person for the rights granted under this License; or
+2. EUR 50.
+
+This limitation does not apply to liability that cannot lawfully be limited, including liability resulting from intentional misconduct where applicable law prohibits such limitation.
+
+---
+
+## 20. Mandatory Legal Rights
+
+Nothing in this License limits:
+
+1. fair use, quotation, research exceptions, interoperability rights, security-testing rights, decompilation rights, or other exceptions granted by mandatory law;
+2. rights that do not require permission under copyright or patent law;
+3. non-waivable consumer rights; or
+4. lawful rights relating to independently created material.
+
+---
+
+## 21. Data Protection and Removal of Personal Data
+
+Nothing in the requirement to preserve history or attribution obliges any person to violate applicable data-protection law.
+
+Where personal information must lawfully be removed, corrected, pseudonymized, or restricted, You may make the minimum necessary change, provided that You preserve non-personal authorship and provenance information to the extent lawfully and reasonably possible.
+
+---
+
+## 22. Governing Law and Jurisdiction
+
+This License is governed by the laws of the Republic of Poland, excluding its conflict-of-laws rules.
+
+For disputes involving persons acting in a commercial or professional capacity, the courts having territorial jurisdiction over the principal place of business or residence of Radomir Kukla shall have jurisdiction.
+
+This section does not deprive a consumer of protections or jurisdiction granted by mandatory law in the consumer's country of habitual residence.
+
+---
+
+## 23. Severability and Reformation
+
+If any provision is found invalid, unlawful, or unenforceable, it shall be interpreted or modified to the minimum extent necessary to make it enforceable while preserving its intended purpose.
+
+If that is not possible, the provision shall be severed, and the remaining provisions shall continue in effect.
+
+A finding affecting one application of a provision does not necessarily invalidate other lawful applications of that provision.
+
+---
+
+## 24. No Waiver
+
+Failure to enforce any provision does not waive the right to enforce it later.
+
+A waiver is effective only if made in writing by the rights holder affected by that waiver.
+
+---
+
+## 25. No Implied Rights
+
+No rights are granted by implication, estoppel, exhaustion beyond mandatory law, or otherwise.
+
+All rights not expressly granted under this License are reserved.
+
+---
+
+## 26. Entire License
+
+This License constitutes the entire agreement concerning the non-commercial Source Code rights granted here, except for:
+
+1. a separate signed commercial license;
+2. a Contributor License Agreement;
+3. a copyright assignment;
+4. mandatory applicable law; or
+5. separate licenses governing identified third-party components.
+
+---
+
+## 27. License Name and Version
+
+The name of this License is:
+
+**Radomir Kukla Non-Commercial Source License 1.1**
+
+You may reproduce this License verbatim.
+
+You may not publish a modified license using the same name or represent a modified version as an official version of this License without prior written permission from Radomir Kukla.
+
+---
+
+## 28. Required Repository Notice
+
+A repository governed by this License should prominently display the following notice:
+
+Copyright 2026 Radomir Kukla and contributors.
+
+Source code licensed under the Radomir Kukla Non-Commercial Source License 1.1.
+
+Non-commercial use, modification, compilation, and reciprocal source distribution are permitted subject to the License.
+
+Commercial use, commercial distribution, sale, monetization, and use in commercial projects are prohibited without a separate written commercial license.
+
+This project is source-available. It is not licensed under the GNU GPL and is not represented as OSI-approved open-source software.
+
+Official pre-compiled binaries are governed separately by the applicable End User License Agreement.
+
+---
+
+## 29. Contact
+
+**Original Licensor:** Radomir Kukla  
+**Project:** RiverFlow  
+**Original Repository:** https://github.com/Predsu/RiverFlow  
+**General Contact:** kuklaradek1@gmail.com  
+**Commercial Licensing:** kuklaradek1@gmail.com  
+**Country:** Poland
