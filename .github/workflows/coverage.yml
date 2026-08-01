@@ -27,7 +27,10 @@ jobs:
             -destination 'platform=macOS' \
             -enableCodeCoverage YES \
             -derivedDataPath build \
-            OTHER_SWIFT_FLAGS="-strict-concurrency=complete"
+            OTHER_SWIFT_FLAGS="-strict-concurrency=complete" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
