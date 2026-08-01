@@ -26,7 +26,7 @@ jobs:
             -destination 'platform=macOS' \
             -enableCodeCoverage YES \
             -derivedDataPath build \
-            -resultBundlePath TestResults.xcresult \
+            -resultBundlePath build/TestResults.xcresult \
             -quiet \
             OTHER_SWIFT_FLAGS="-strict-concurrency=complete" \
             CODE_SIGN_IDENTITY="" \
@@ -38,6 +38,6 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: ${{ github.repository }}
-          files: TestResults.xcresult
+          files: build/TestResults.xcresult
           fail_ci_if_error: true
           flags: macos-app
