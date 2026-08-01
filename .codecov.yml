@@ -7,10 +7,14 @@ coverage:
       default:
         target: 30%
         threshold: 1%
+        flags:
+          - macos-app
     patch:
       default:
         target: auto
         threshold: 5%
+        flags:
+          - macos-app
 
 comment:
   layout: "reach, diff, flags, files"
