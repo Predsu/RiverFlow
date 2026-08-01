@@ -26,24 +26,18 @@ jobs:
             -destination 'platform=macOS' \
             -enableCodeCoverage YES \
             -derivedDataPath build \
+            -resultBundlePath TestResults.xcresult \
             -quiet \
             OTHER_SWIFT_FLAGS="-strict-concurrency=complete" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Convert xcresult to lcov
-        run: |
-          brew install xcresultparser
-          XCRESULT_PATH=$(find build/Logs/Test -name "*.xcresult" | head -n 1)
-          echo "Found here: $XCRESULT_PATH"
-          xcresultparser --output-format lcov "$XCRESULT_PATH" > coverage.lcov
-
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: ${{ github.repository }}
-          files: ./coverage.lcov
+          files: TestResults.xcresult
           fail_ci_if_error: true
           flags: macos-app
