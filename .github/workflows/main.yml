@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests with coverage
+        run: |
+          xcodebuild test \
+            -scheme RiverFlow \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -enableCodeCoverage YES \
+            -resultBundlePath TestResults.xcresult
+
+      - name: Convert coverage to lcov (or use xccov json)
+        run: |
+          xcrun xccov view --report --json TestResults.xcresult > coverage.json
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.json
+          fail_ci_if_error: true
