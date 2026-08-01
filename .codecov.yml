@@ -16,6 +16,10 @@ coverage:
         flags:
           - macos-app
 
+flags:
+  macos-app:
+    carryforward: false
+
 comment:
   layout: "reach, diff, flags, files"
   behavior: default
