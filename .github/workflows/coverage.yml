@@ -42,8 +42,6 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: ${{ github.repository }}
-          override_pr: ${{ github.event.pull_request.number }}
-          override_commit: ${{ github.sha }}
           files: ./cobertura.xml
           flags: macos-app
           fail_ci_if_error: true
