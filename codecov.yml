@@ -1,7 +1,0 @@
-coverage:
-  status:
-    project:
-      default: false
-      app:
-        target: auto
-        paths: "RiverFlow/"
