@@ -26,25 +26,24 @@ jobs:
             -destination 'platform=macOS' \
             -enableCodeCoverage YES \
             -derivedDataPath build \
-            -resultBundlePath build/TestResults.xcresult \
             -quiet \
             OTHER_SWIFT_FLAGS="-strict-concurrency=complete" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Export Coverage to LCOV via llvm-cov
+      - name: Convert xcresult to lcov
         run: |
-          xcrun llvm-cov export \
-            $(find build/Build/Products/Debug -name "RiverFlow" -type f ! -name "*.lcov" | head -n 1) \
-            -instr-profile=$(find build/Build/ProfileData -name "Coverage.profdata" | head -n 1) \
-            -format=lcov > coverage.lcov
+          brew install xcresultparser
+          XCRESULT_PATH=$(find build/Logs/Test -name "*.xcresult" | head -n 1)
+          echo "Found here: $XCRESULT_PATH"
+          xcresultparser --output-format lcov "$XCRESULT_PATH" > coverage.lcov
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: ${{ github.repository }}
-          files: coverage.lcov
+          files: ./coverage.lcov
           fail_ci_if_error: true
           flags: macos-app
