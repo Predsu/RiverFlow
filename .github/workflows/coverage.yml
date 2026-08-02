@@ -25,19 +25,17 @@ jobs:
             -scheme RiverFlow \
             -destination 'platform=macOS' \
             -enableCodeCoverage YES \
-            -derivedDataPath build \
+            -resultBundlePath TestResults.xcresult \
             -quiet \
             OTHER_SWIFT_FLAGS="-strict-concurrency=complete" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Convert xcresult to lcov
+      - name: Convert xcresult to Cobertura XML
         run: |
           brew install xcresultparser
-          XCRESULT_PATH=$(find build/Logs/Test -name "*.xcresult" | head -n 1)
-          echo "Found here: $XCRESULT_PATH"
-          xcresultparser --output-format lcov "$XCRESULT_PATH" > coverage.lcov
+          xcresultparser -o cobertura TestResults.xcresult > cobertura.xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -46,6 +44,6 @@ jobs:
           slug: ${{ github.repository }}
           override_pr: ${{ github.event.pull_request.number }}
           override_commit: ${{ github.sha }}
-          files: ./coverage.lcov
-          fail_ci_if_error: true
+          files: ./cobertura.xml
           flags: macos-app
+          fail_ci_if_error: true
