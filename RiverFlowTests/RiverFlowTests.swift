@@ -100,4 +100,112 @@ struct FolderViewModelTests {
         
         #expect(viewModel.files.isEmpty)
     }
+    
+    @Test("currentDirName returns the last path component for a normal directory")
+    func currentDirNameReturnsTheLastPathComponentForANormalDirectory() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        
+        #expect(viewModel.currentDirName == tempDir.lastPathComponent)
+    }
+    
+    @Test("currentDirName returns / for the root directory")
+    func currentDirNameReturnsSlashForTheRootDirectory() async throws {
+        let viewModel = FolderViewModel(startDir: URL(fileURLWithPath: "/"))
+        
+        #expect(viewModel.currentDirName == "/")
+    }
+    
+    @Test("matchingSidebarItem finds the sidebar entry for the home directory")
+    func matchingSidebarItemFindsTheSidebarEntryForTheHomeDirectory() async throws {
+        let viewModel = FolderViewModel(startDir: URL(fileURLWithPath: NSHomeDirectory()))
+        
+        #expect(viewModel.matchingSidebarItem == .home)
+    }
+    
+    @Test("matchingSidebarItem is nil for a normal directory")
+    func matchingSidebarItemIsNilForANormalDirectory() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        
+        #expect(viewModel.matchingSidebarItem == nil)
+    }
+    
+    @Test("enterDirectory navigates into a subdirectory and reloads its contents")
+    func enterDirectoryNavigatesIntoASubdirectoryAndReloadsItsContents() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let subDirURL = tempDir.appendingPathComponent("subdir")
+        try FileManager.default.createDirectory(at: subDirURL, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: subDirURL.appendingPathComponent("file.txt").path, contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        let subDirItem = try #require(viewModel.files.first { $0.name == "subdir" })
+        
+        viewModel.enterDirectory(dir: subDirItem)
+        
+        #expect(viewModel.currentDir.standardizedFileURL == subDirURL.standardizedFileURL)
+        #expect(viewModel.files.count == 1)
+        #expect(viewModel.files.first?.name == "file.txt")
+    }
+    
+    @Test("enterDirectory does nothing on normal file")
+    func enterDirectoryDoesNothingOnNormalFile() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        FileManager.default.createFile(atPath: tempDir.appendingPathComponent("file.txt").path, contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        let fileItem = try #require(viewModel.files.first { $0.name == "file.txt"})
+        
+        viewModel.enterDirectory(dir: fileItem)
+        
+        #expect(viewModel.currentDir == tempDir)
+    }
+    
+    @Test("goToParentDirectory moves up one level")
+    func goToParentDirectoryMovesUpOneLevel() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let subDir = tempDir.appendingPathComponent("subdir")
+        try FileManager.default.createDirectory(at: subDir, withIntermediateDirectories: true)
+        
+        let viewModel = FolderViewModel(startDir: subDir)
+        viewModel.goToParentDirectory()
+        
+        #expect(viewModel.currentDir.standardizedFileURL == tempDir.standardizedFileURL)
+    }
+    
+    @Test("Hidden files are correctly flagged when shown")
+    func hiddenFilesAreCorrectlyFlaggedWhenShown() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        FileManager.default.createFile(atPath: tempDir.appendingPathComponent(".hidden.txt").path, contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        viewModel.showHiddenFiles = true
+        
+        let hiddenItem = try #require(viewModel.files.first { $0.name == ".hidden.txt" })
+        #expect(hiddenItem.isHidden)
+    }
 }
