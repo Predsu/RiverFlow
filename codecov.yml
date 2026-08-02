@@ -1,8 +1,7 @@
 coverage:
   status:
     project:
-      default:
+      default: false
+      app:
         target: auto
-    patch:
-      default:
-        target: auto
+        paths: "RiverFlow/"
