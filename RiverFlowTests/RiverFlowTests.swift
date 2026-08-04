@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import RiverFlow
 
-struct FolderViewModelTests {
+@Suite struct FolderViewModelTests {
     private static func createTempDir() throws -> URL {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -349,6 +349,7 @@ struct FolderViewModelTests {
     }
 }
 
+@Suite struct FileItemTests {
     private static func makeItem(
         url: URL = URL(fileURLWithPath: "/tmp/test.txt"),
         name: String = "test.txt",
@@ -361,7 +362,7 @@ struct FolderViewModelTests {
     }
     
     @Test("formattedSize formats byte count")
-    func formattedSizeFormatsByteCount() {
+    func formattedSizeFormatsByteCount() async throws {
         let item = Self.makeItem(size: 1024)
         let item2 = Self.makeItem(size: 3123)
         
@@ -375,28 +376,28 @@ struct FolderViewModelTests {
     }
     
     @Test("formattedSize returns a placeholder when size is nil")
-    func formattedSizeReturnsPlaceholderWhenSizeIsNil() {
+    func formattedSizeReturnsPlaceholderWhenSizeIsNil() async throws {
         let item = Self.makeItem(size: nil)
         
         #expect(item.formattedSize == "--")
     }
     
     @Test("formattedSize handles 0 bytes without falling back to the placeholder")
-    func formattedSizeHandlesZeroBytesWithoutFallingBackToPlaceholder() {
+    func formattedSizeHandlesZeroBytesWithoutFallingBackToPlaceholder() async throws {
         let item = Self.makeItem(size: 0)
         
         #expect(item.formattedSize != "--")
     }
     
     @Test("formattedDate returns a placeholder when the date is nil")
-    func formattedDateReturnsPlaceholderWhenTheDateIsNil() {
+    func formattedDateReturnsPlaceholderWhenTheDateIsNil() async throws {
         let item = Self.makeItem(modificationDate: nil)
         
         #expect(item.formattedDate == "--")
     }
     
     @Test("formattedDate returns a non-empty string for a known date")
-    func formattedDateReturnsANonEmptyStringForAKnownDate() {
+    func formattedDateReturnsANonEmptyStringForAKnownDate() async throws{
         let item = Self.makeItem(modificationDate: Date())
         
         #expect(item.formattedDate != "--")
@@ -404,14 +405,14 @@ struct FolderViewModelTests {
     }
     
     @Test("fileExtensionIconText is empty when there is no extension")
-    func fileExtensionIconTextIsEmptyWhenThereIsNoExtension() {
+    func fileExtensionIconTextIsEmptyWhenThereIsNoExtension() async throws {
         let item = Self.makeItem(url: URL(fileURLWithPath: "/tmp/TESTNOEX"), name: "TESTNOEX")
         
         #expect(item.fileExtensionIconText == "")
     }
     
     @Test("Two FileItem instances for the same URL still have distinct identities")
-    func twoFileItemInstancesForTheSameURLStillHaveDistinctIdentities() {
+    func twoFileItemInstancesForTheSameURLStillHaveDistinctIdentities() async throws{
         let url = URL(fileURLWithPath: "/tmp/test.txt")
         let a = Self.makeItem(url: url)
         let b = Self.makeItem(url: url)
