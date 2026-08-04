@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import RiverFlow
 
-struct FolderViewModelTests {
+@Suite struct FolderViewModelTests {
     private static func createTempDir() throws -> URL {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -208,9 +208,148 @@ struct FolderViewModelTests {
         let hiddenItem = try #require(viewModel.files.first { $0.name == ".hidden.txt" })
         #expect(hiddenItem.isHidden)
     }
+    
+    @Test("renameFile renames the file and reloads")
+    func renameFileRenamesTheFileAndReloads() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let originalFileURL = tempDir.appendingPathComponent("original.txt")
+        FileManager.default.createFile(atPath: originalFileURL.path, contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        let item = try #require(viewModel.files.first { $0.name == "original.txt" })
+        
+        viewModel.renameFile(file: item, to: "new.txt")
+        
+        #expect(viewModel.files.contains { $0.name == "new.txt" })
+        #expect(!viewModel.files.contains { $0.name == "original.txt" })
+        #expect(FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("new.txt").path))
+        #expect(!FileManager.default.fileExists(atPath: originalFileURL.path))
+    }
+    
+    @Test("renameFile does nothing when the new name is empty")
+    func renameFileDoesNothingWhenTheNewNameIsEmpty() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let originalFileURL = tempDir.appendingPathComponent("original.txt")
+        FileManager.default.createFile(atPath: originalFileURL.path, contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        let item = try #require(viewModel.files.first { $0.name == "original.txt" })
+        
+        viewModel.renameFile(file: item, to: "   ")
+        #expect(viewModel.files.contains { $0.name == "original.txt" })
+        #expect(FileManager.default.fileExists(atPath: originalFileURL.path))
+    }
+    
+    @Test("moveToTrash removes the file from the current directory")
+    func moveToTrashRemovesTheFileFromTheCurrentDirectory() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let fileURL = tempDir.appendingPathComponent("test.txt")
+        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        let item = try #require(viewModel.files.first { $0.name == "test.txt" })
+        
+        viewModel.moveToTrash(files: [item])
+        
+        #expect(viewModel.files.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+    
+    @Test("moveToTrash registers an undo action that restores the file")
+    func moveToTrashRegistersAnUndoActionThatRestoresTheFile() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let fileURL = tempDir.appendingPathComponent("test.txt")
+        FileManager.default.createFile(atPath: fileURL.path(), contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        let undoManager = UndoManager()
+        viewModel.undoManager = undoManager
+        
+        let item = try #require(viewModel.files.first { $0.name == "test.txt"})
+        viewModel.moveToTrash(files: [item])
+        #expect(viewModel.files.isEmpty)
+        
+        undoManager.undo()
+        
+        #expect(viewModel.files.contains { $0.name == "test.txt" })
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+    
+    @Test("createNewDirectory increments the name when 'New Folder' already exists")
+    func createNewDirectoryIncrementsTheNameWhenNewFolderAlreadyExists() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let viewModel = FolderViewModel()
+        
+        viewModel.createNewDirectory()
+        viewModel.createNewDirectory()
+        
+        #expect(viewModel.files.contains { $0.name == "New Folder" })
+        #expect(viewModel.files.contains { $0.name == "New Folder 1" })
+    }
+    
+    @Test("createNewFile increments the name when 'Untitled.txt' already exists")
+    func createNewFileIncrementsTheNameWhenUntitledTxtAlreadyExists() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let viewModel = FolderViewModel()
+        
+        viewModel.createNewFile()
+        viewModel.createNewFile()
+        
+        #expect(viewModel.files.contains { $0.name == "Untitled.txt" })
+        #expect(viewModel.files.contains { $0.name == "Untitled 1.txt" })
+    }
+    
+    @Test("copyFiles followed by pasteFiles duplicates the source file")
+    func copyFilesFollowedByPasteFilesDuplicatesTheSourceFile() async throws {
+        let sourceDir = try Self.createTempDir()
+        let destDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: sourceDir)
+            Self.deleteTempDir(at: destDir)
+        }
+        
+        let sourceFileURL = sourceDir.appendingPathComponent("test.txt")
+        FileManager.default.createFile(atPath: sourceFileURL.path, contents: nil)
+        
+        let sourceViewModel = FolderViewModel(startDir: sourceDir)
+        let item = try #require(sourceViewModel.files.first { $0.name == "test.txt" })
+        sourceViewModel.copyFiles(files: [item])
+        
+        let destViewModel = FolderViewModel(startDir: destDir)
+        destViewModel.pasteboardURLs = sourceViewModel.pasteboardURLs
+        destViewModel.isOperationCut = false
+        destViewModel.pasteFiles()
+        
+        #expect(destViewModel.files.contains { $0.name == "test.txt" })
+        #expect(FileManager.default.fileExists(atPath: sourceFileURL.path))
+    }
 }
 
-struct FileItemTests {
+@Suite struct FileItemTests {
     private static func makeItem(
         url: URL = URL(fileURLWithPath: "/tmp/test.txt"),
         name: String = "test.txt",
@@ -223,7 +362,7 @@ struct FileItemTests {
     }
     
     @Test("formattedSize formats byte count")
-    func formattedSizeFormatsByteCount() {
+    func formattedSizeFormatsByteCount() async throws {
         let item = Self.makeItem(size: 1024)
         let item2 = Self.makeItem(size: 3123)
         
@@ -237,28 +376,28 @@ struct FileItemTests {
     }
     
     @Test("formattedSize returns a placeholder when size is nil")
-    func formattedSizeReturnsPlaceholderWhenSizeIsNil() {
+    func formattedSizeReturnsPlaceholderWhenSizeIsNil() async throws {
         let item = Self.makeItem(size: nil)
         
         #expect(item.formattedSize == "--")
     }
     
     @Test("formattedSize handles 0 bytes without falling back to the placeholder")
-    func formattedSizeHandlesZeroBytesWithoutFallingBackToPlaceholder() {
+    func formattedSizeHandlesZeroBytesWithoutFallingBackToPlaceholder() async throws {
         let item = Self.makeItem(size: 0)
         
         #expect(item.formattedSize != "--")
     }
     
     @Test("formattedDate returns a placeholder when the date is nil")
-    func formattedDateReturnsPlaceholderWhenTheDateIsNil() {
+    func formattedDateReturnsPlaceholderWhenTheDateIsNil() async throws {
         let item = Self.makeItem(modificationDate: nil)
         
         #expect(item.formattedDate == "--")
     }
     
     @Test("formattedDate returns a non-empty string for a known date")
-    func formattedDateReturnsANonEmptyStringForAKnownDate() {
+    func formattedDateReturnsANonEmptyStringForAKnownDate() async throws{
         let item = Self.makeItem(modificationDate: Date())
         
         #expect(item.formattedDate != "--")
@@ -266,14 +405,14 @@ struct FileItemTests {
     }
     
     @Test("fileExtensionIconText is empty when there is no extension")
-    func fileExtensionIconTextIsEmptyWhenThereIsNoExtension() {
+    func fileExtensionIconTextIsEmptyWhenThereIsNoExtension() async throws {
         let item = Self.makeItem(url: URL(fileURLWithPath: "/tmp/TESTNOEX"), name: "TESTNOEX")
         
         #expect(item.fileExtensionIconText == "")
     }
     
     @Test("Two FileItem instances for the same URL still have distinct identities")
-    func twoFileItemInstancesForTheSameURLStillHaveDistinctIdentities() {
+    func twoFileItemInstancesForTheSameURLStillHaveDistinctIdentities() async throws{
         let url = URL(fileURLWithPath: "/tmp/test.txt")
         let a = Self.makeItem(url: url)
         let b = Self.makeItem(url: url)
