@@ -166,14 +166,37 @@ struct ContentView: View {
     @ViewBuilder
     private var detailView: some View {
         VStack {
-            if selectedFileViewStyle == .list {
-                listView
-            } else {
-                gridView
+            if !viewModel.searchText.isEmpty {
+                HStack {
+//                    Text("Search in:")
+//                        .font(.caption)
+//                        .foregroundStyle(.secondary)
+                    
+                    Picker("Search scope", selection: $viewModel.searchScope) {
+                        Text("(\(viewModel.currentDirName))").tag(SearchScope.currentFolder)
+                        Text("This Mac").tag(SearchScope.thisMac)
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Material.ultraThin)
+            }
+            
+            Group {
+                if selectedFileViewStyle == .list {
+                    listView
+                } else {
+                    gridView
+                }
             }
         }
         .frame(minWidth: 600, minHeight: 400)
         .navigationTitle("")
+        .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Search")
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button(action: {
