@@ -16,7 +16,30 @@ class FolderViewModel {
     var pasteboardURLs: [URL] = []
     var isOperationCut: Bool = false
     
+    var searchText = "" {
+        didSet {
+            performSearch()
+        }
+    }
+    
+    var searchScope: SearchScope = .currentFolder {
+        didSet {
+            performSearch()
+        }
+    }
+    
+    var globalSearchResults: [FileItem] = []
+    private var metadataQuery: NSMetadataQuery?
+    
     weak var undoManager: UndoManager?
+    
+    deinit {
+        if let query = metadataQuery {
+            query.stop()
+            NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidFinishGathering, object: query)
+            NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidUpdate, object: query)
+        }
+    }
     
     private func registerUndo(actionName: String, _ handler: @escaping (FolderViewModel) -> Void) {
         undoManager?.registerUndo(withTarget: self, handler: handler)
@@ -46,25 +69,196 @@ class FolderViewModel {
         loadCurrentDirectory()
     }
     
+    private static let userContentFolderNames: Set<String> = [
+        "desktop", "documents", "downloads", "pictures", "movies", "music", "public"
+    ]
+    
+    private static let systemNoiseComponents: Set<String> = [
+        "library", "node_modules", ".git", ".svn", ".hg", "deriveddata",
+        ".cache", ".npm", ".yarn", ".cargo", ".rustup", "pods", ".build",
+        ".trash", ".terraform", "__pycache__", ".venv", "venv", ".gradle",
+        ".docker", "site-packages", "build", "dist", ".next", ".xcodeproj",
+        ".xcworkspace"
+    ]
+    
+    /// 0: sitting loose in Home, or inside a well-known user-content folder (Desktop, Documents, ...)
+    /// 1: elsewhere under Home, nothing suspicious about it
+    /// 2: a dotfile/dot-folder that slipped through (configs, etc.)
+    /// 3: known system/tooling noise (Library, node_modules, .git, caches, build output, Trash...)
+    /// 4: outside the user's Home directory entirely
+    private static func relevanceTier(for url: URL, homeDir: String) -> Int {
+        let path = url.path
+        guard path.hasPrefix(homeDir) else { return 4 }
+        
+        let lowerComponents = url.pathComponents.map { $0.lowercased() }
+        if lowerComponents.contains(where: { systemNoiseComponents.contains($0) }) {
+            return 3
+        }
+        
+        if url.lastPathComponent.hasPrefix(".") {
+            return 2
+        }
+        
+        let relativePath = String(path.dropFirst(homeDir.count))
+        let relativeComponents = relativePath
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .split(separator: "/")
+            .map { $0.lowercased() }
+        
+        if relativeComponents.isEmpty {
+            return 0
+        }
+        
+        if userContentFolderNames.contains(relativeComponents[0]) {
+            return 0
+        }
+        
+        if relativeComponents.count == 1 {
+            return 0
+        }
+        
+        return 1
+    }
+    
     var sortedFiles: [FileItem] {
-        switch currentSortingOption {
-        case .name:
-            return files.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        case .modificationDate:
-            return files.sorted {
-                let d1 = $0.modificationDate ?? Date.distantPast
-                let d2 = $1.modificationDate ?? Date.distantPast
-                return d1 > d2
+        let baseFiles = (searchText.isEmpty || searchScope == .currentFolder) ? files : globalSearchResults
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isSearching = !trimmedSearch.isEmpty
+        
+        let filtered = baseFiles.filter { file in
+            guard isSearching else { return true }
+            if searchScope == .currentFolder {
+                return file.name.localizedCaseInsensitiveContains(trimmedSearch)
             }
-        case .size:
-            return files.sorted {
-                if let s1 = $0.size, let s2 = $1.size {
-                    return s1 > s2
+            return true
+        }
+        
+        let homeDir = NSHomeDirectory()
+        
+        return filtered.sorted { (a, b) -> Bool in
+            if isSearching {
+                let tierA = Self.relevanceTier(for: a.url, homeDir: homeDir)
+                let tierB = Self.relevanceTier(for: b.url, homeDir: homeDir)
+                if tierA != tierB {
+                    return tierA < tierB
                 }
-                if $0.size != nil { return true }
-                if $1.size != nil { return false }
-                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
             }
+            
+            switch currentSortingOption {
+            case .name:
+                return a.name.localizedStandardCompare(b.name) == .orderedAscending
+            case .modificationDate:
+                let d1 = a.modificationDate ?? Date.distantPast
+                let d2 = b.modificationDate ?? Date.distantPast
+                if d1 != d2 {
+                    return d1 > d2
+                }
+                return a.name.localizedStandardCompare(b.name) == .orderedAscending
+            case .size:
+                if let s1 = a.size, let s2 = b.size {
+                    if s1 != s2 {
+                        return s1 > s2
+                    }
+                } else if a.size != nil {
+                    return true
+                } else if b.size != nil {
+                    return false
+                }
+                return a.name.localizedStandardCompare(b.name) == .orderedAscending
+            }
+        }
+    }
+    
+    private func performSearch() {
+        let queryText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if searchScope == .thisMac && !queryText.isEmpty {
+            runSpotlightQuery(text: queryText)
+        } else {
+            if let currentQuery = metadataQuery {
+                currentQuery.stop()
+                NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidFinishGathering, object: currentQuery)
+                NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidUpdate, object: currentQuery)
+                metadataQuery = nil
+            }
+            globalSearchResults = []
+        }
+    }
+    
+    private func runSpotlightQuery(text: String) {
+        if let currentQuery = metadataQuery {
+            currentQuery.stop()
+            NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidFinishGathering, object: currentQuery)
+            NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidUpdate, object: currentQuery)
+        }
+        
+        let query = NSMetadataQuery()
+        let namePredicate = NSPredicate(format: "kMDItemDisplayName CONTAINS[cd] %@", text)
+        
+        let excludePaths = ["/System/", "/Library/", "/usr/", "/bin/", "/sbin/", "/private/", "/var/"]
+        var excludePredicates: [NSPredicate] = []
+        for path in excludePaths {
+            excludePredicates.append(NSPredicate(format: "NOT (kMDItemPath BEGINSWITH %@)", path))
+        }
+        
+        let combinedPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [namePredicate] + excludePredicates)
+        query.predicate = combinedPredicate
+        query.searchScopes = [NSMetadataQueryIndexedLocalComputerScope]
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMetadataQueryNotification(_:)),
+            name: .NSMetadataQueryDidFinishGathering,
+            object: query
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMetadataQueryNotification(_:)),
+            name: .NSMetadataQueryDidUpdate,
+            object: query
+        )
+        
+        self.metadataQuery = query
+        query.start()
+    }
+    
+    @objc private func handleMetadataQueryNotification(_ notification: Notification) {
+        guard let query = notification.object as? NSMetadataQuery,
+              query === self.metadataQuery else { return }
+        
+        var results: [FileItem] = []
+        
+        query.disableUpdates()
+        for item in query.results {
+            if let metaItem = item as? NSMetadataItem,
+               let path = metaItem.value(forAttribute: NSMetadataItemPathKey) as? String {
+                let url = URL(fileURLWithPath: path)
+                
+                if path.contains("/.") { continue }
+                
+                let isDir = (metaItem.value(forAttribute: NSMetadataItemContentTypeKey) as? String) == "public.folder" || (metaItem.value(forAttribute: NSMetadataItemContentTypeKey) as? String) == "com.apple.package"
+                let fileSize = metaItem.value(forAttribute: NSMetadataItemFSSizeKey) as? NSNumber
+                let modifDate = metaItem.value(forAttribute: NSMetadataItemFSContentChangeDateKey) as? Date
+                
+                let fileItem = FileItem(
+                    url: url,
+                    name: url.lastPathComponent,
+                    itemType: isDir ? .DIRECTORY : .FILE,
+                    size: isDir ? nil : fileSize?.int64Value,
+                    modificationDate: modifDate,
+                    isHidden: url.lastPathComponent.hasPrefix(".")
+                )
+                results.append(fileItem)
+            }
+        }
+        query.enableUpdates()
+        
+        let stableResults = results.sorted { (a, b) -> Bool in
+            a.name.localizedStandardCompare(b.name) == .orderedAscending
+        }
+        
+        DispatchQueue.main.async {
+            self.globalSearchResults = stableResults
         }
     }
     
