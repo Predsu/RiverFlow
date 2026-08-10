@@ -347,6 +347,90 @@ import Testing
         #expect(destViewModel.files.contains { $0.name == "test.txt" })
         #expect(FileManager.default.fileExists(atPath: sourceFileURL.path))
     }
+    
+    @Test("Default search scope is Current Folder and search text starts empty")
+    func defaultSearchScopeIsCurrentFolderAndSearchTextStartsEmpty() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        
+        #expect(viewModel.searchScope == .currentFolder)
+        #expect(viewModel.searchText.isEmpty)
+        #expect(viewModel.globalSearchResults.isEmpty)
+    }
+    
+    @Test("Empty search text returns every file in current folder")
+    func emptySearchTextReturnsEveryFileInCurrentFolder() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        FileManager.default.createFile(atPath: String(tempDir.appendingPathComponent("test1.txt").path), contents: nil)
+        FileManager.default.createFile(atPath: String(tempDir.appendingPathComponent("test2.txt").path), contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        
+        #expect(viewModel.sortedFiles.count == 2)
+    }
+    
+    @Test("Whitespace-only search text returns every file")
+    func whitespaceOnlySearchTextReturnsEveryFile() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        FileManager.default.createFile(atPath: String(tempDir.appendingPathComponent("test1.txt").path), contents: nil)
+        FileManager.default.createFile(atPath: String(tempDir.appendingPathComponent("test2.txt").path), contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        viewModel.searchText = "   "
+        
+        #expect(viewModel.sortedFiles.count == 2)
+    }
+    
+    @Test("Searching the current folder filters files by a case-insensitive substring match")
+    func searchingTheCurrentFolderFiltersFilesByACaseInsensitiveSubstringMatch() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        FileManager.default.createFile(atPath: String(tempDir.appendingPathComponent("apple.txt").path), contents: nil)
+        FileManager.default.createFile(atPath: String(tempDir.appendingPathComponent("pineapple.txt").path), contents: nil)
+        FileManager.default.createFile(atPath: String(tempDir.appendingPathComponent("banana.txt").path), contents: nil)
+        FileManager.default.createFile(atPath: String(tempDir.appendingPathComponent("cachalot.txt").path), contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        viewModel.searchText = "app"
+        
+        let results = viewModel.sortedFiles
+        #expect(results.count == 2)
+        #expect(results.contains { $0.name == "apple.txt" })
+        #expect(results.contains { $0.name == "pineapple.txt" })
+        #expect(!results.contains { $0.name == "banana.txt" })
+        #expect(!results.contains { $0.name == "cachalot.txt" })
+    }
+    
+    @Test("Search with no matches returns empty result set")
+    func searchWithNoMatchesReturnsEmptyResultSet() async throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        FileManager.default.createFile(atPath: String(tempDir.appendingPathComponent("test1.txt").path), contents: nil)
+        FileManager.default.createFile(atPath: String(tempDir.appendingPathComponent("test2.txt").path), contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        viewModel.searchText = "test3"
+        
+        #expect(viewModel.sortedFiles.isEmpty)
+    }
 }
 
 @Suite struct FileItemTests {
