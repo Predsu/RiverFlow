@@ -75,3 +75,10 @@ enum FileSortOption: String, CaseIterable, Identifiable {
         }
     }
 }
+
+enum SearchScope: String, CaseIterable, Identifiable {
+    case currentFolder = "Current Folder"
+    case thisMac = "This Mac"
+    
+    var id: String { rawValue }
+}
