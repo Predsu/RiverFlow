@@ -2,6 +2,7 @@ import SwiftUI
 import Foundation
 import Observation
 
+/// Custom SwiftUI preference key used to map file IDs to their bounding frame rectangles in screen space.
 private struct FileFramePreferenceKey: PreferenceKey {
     static var defaultValue: [UUID: CGRect] = [:]
     static func reduce(value: inout [UUID : CGRect], nextValue: () -> [UUID : CGRect]) {
@@ -9,6 +10,7 @@ private struct FileFramePreferenceKey: PreferenceKey {
     }
 }
 
+/// Context menu view for grid layout view.
 struct GridContextMenu: View {
     let viewModel: FolderViewModel
 

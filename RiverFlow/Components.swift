@@ -3,6 +3,7 @@ import AppKit
 import QuickLookThumbnailing
 import UniformTypeIdentifiers
 
+/// AppKit-backed view wrapper that intercepts right-click mouse events.
 struct RightClickCatcher: NSViewRepresentable {
     let onRightClick: () -> Void
 
@@ -34,6 +35,9 @@ struct RightClickCatcher: NSViewRepresentable {
     }
 }
 
+/// SwiftUI view presenting element's data in separate window.
+///
+/// Handles automatic size calculation running in background and QuickLook thumbnails.
 struct FileInfoView: View {
     let file: FileItem
     weak var window: NSWindow?
@@ -115,6 +119,13 @@ struct FileInfoView: View {
         }
     }
     
+    /// Calculates total folder contents size.
+    ///
+    /// Recursively searches through folder, skipping hidden files and insides of `.app` bundles.
+    /// Supports task cancellation (`Task.isCancelled`).
+    ///
+    /// - Parameter url: URL path to target folder as `URL`.
+    /// - Returns: Total size in bytes as `Int64`.
     private func calculateFolderSize(at url: URL) async -> Int64 {
         let fileManager = FileManager.default
         var totalSize: Int64 = 0
@@ -145,6 +156,10 @@ struct FileInfoView: View {
         return totalSize
     }
     
+    /// Formats raw bytes number into human-readable text.
+    ///
+    /// - Parameter bytes: Bytes number as `Int64`.
+    /// - Returns: Automatically formatted bytes as `String` (e.g., "1.2 MB").
     private func formatBytes(_ bytes: Int64) -> String {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useAll]
@@ -153,14 +168,19 @@ struct FileInfoView: View {
     }
 }
 
+/// AppKit window manager responsible for displaying file info windows.
+///
+/// Maintains lifecycle of windows, handles duplication attempts and removing windows.
 class FileWindowManager: NSObject, NSWindowDelegate {
     static let shared = FileWindowManager()
     private var openWindows: [String: NSWindow] = [:]
     
+    /// Opens info window for given `FileItem`
     static func openInfoView(for file: FileItem) {
         shared.openInfoView(for: file)
     }
     
+    /// Presents or brings to focus info window for specified `FileItem`.
     private func openInfoView(for file: FileItem) {
         let windowIdentifier = "fileinfowindow-\(file.id.uuidString)"
         
@@ -190,6 +210,7 @@ class FileWindowManager: NSObject, NSWindowDelegate {
         openWindows[windowIdentifier] = window
     }
     
+    /// Handles window closure to clean up tracking references.
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow,
             let id = window.identifier?.rawValue else { return }
@@ -197,6 +218,9 @@ class FileWindowManager: NSObject, NSWindowDelegate {
     }
 }
 
+/// Manager responsible for generating and caching file thumbnails.
+///
+/// Uses Apple's QuickLook thumbnailing framework to asynchonously generate thumbnails which are stored in `NSCache`.
 class ThumbnailManager {
     static let shared = ThumbnailManager()
     private let cache = NSCache<NSURL, NSImage>()
@@ -206,6 +230,12 @@ class ThumbnailManager {
         cache.evictsObjectsWithDiscardedContent = true
     }
     
+    /// Asynchronously generates or retrieves a cached thumbnail image for a file at given URL.
+    ///
+    /// - Parameters:
+    ///     - url: Target file URL as `URL`.
+    ///     - size: Target width and height as `CGFloat`.
+    ///     - completion: Closure invoked on main thread delivering the generated `NSImage` or `nil`.
     func getFileThumbnail(for url: URL, size: CGFloat, completion: @escaping (NSImage?) -> Void) {
         let nsURL = url as NSURL
         
@@ -240,11 +270,20 @@ class ThumbnailManager {
         }
     }
     
+    /// Clears all cached thumbnails.
     func clearCache() {
         cache.removeAllObjects()
     }
 }
 
+/// SwiftUI view that displays corresponding icon or thumbnail for `FileItem`.
+///
+/// Determines how an item should be visually represented based on its type and location. Supports:
+/// - bundles icons
+/// - image thumbnails
+/// - special system and user directories
+/// - generic directory icons
+/// - generic documents icons with extension labels
 struct FileIconView: View {
     let file: FileItem
     var baseSize: CGFloat = 64
@@ -311,6 +350,9 @@ struct FileIconView: View {
         static let shared = IconCache()
         private var cache: [String: NSImage] = [:]
         
+        /// Retrieves the cached icon for given path.
+        /// - Parameter path: File path as `String`.
+        /// - Returns: Icon as `NSImage`
         func icon(for path: String) -> NSImage {
             if let cached = cache[path] { return cached }
             let icon = NSWorkspace.shared.icon(forFile: path)
@@ -383,6 +425,7 @@ struct FileIconView: View {
         }
     }
     
+    /// Triggers asynchronous thumbnail generation for FileItem.
     private func loadThumbnailImage() {
         guard !hasAttemptedLoad else { return }
         hasAttemptedLoad = true
@@ -393,6 +436,9 @@ struct FileIconView: View {
     }
 }
 
+/// SwiftUI context menu containing actions for `FileItem`.
+///
+/// Provides opening, copying, cutting, renaming, compressing, trashing.
 struct FileContextMenu: View {
     let file: FileItem
     let viewModel: FolderViewModel
@@ -498,6 +544,14 @@ struct FileContextMenu: View {
     }
 }
 
+/// SwiftUI view representing `FileItem` in grid layout.
+///
+/// Displays a file icon and editable name in grid cell. Supports:
+/// - single click selection
+/// - double click activation
+/// - right-click context menu
+/// - drag-and-drop targeting
+/// - actions from `FileContextMenu`
 struct FileGridItemView: View {
     let file: FileItem
     let isSelected: Bool
@@ -583,6 +637,14 @@ struct FileGridItemView: View {
     }
 }
 
+/// SwiftUI view representing `FileItem` in list layout.
+///
+/// Displays a compact horizontal representation. Supports:
+/// - single click selection
+/// - double click activation
+/// - right-click context menu
+/// - drag-and-drop targeting
+/// - actions from `FileContextMenu`
 struct FileListItemView: View {
     let file: FileItem
     let isSelected: Bool
@@ -657,6 +719,7 @@ struct FileListItemView: View {
     }
 }
 
+/// SwiftUI view displaying folder name and full, copiable directory path on hover.
 struct InteractivePathTitleView: View {
     let fullPath: String
     let folderName: String
@@ -719,13 +782,20 @@ struct InteractivePathTitleView: View {
     }
 }
 
+/// Collection of utilities for playing app's sound effects.
 struct SoundEffects {
+    /// Warms audio engine by playing silent system sound.
+    /// - Warning: It helps only for the first few minutes of app running. Issue fixing ongoing.
     static func warmUpAudioEngine() {
         if let silentSound = NSSound(named: "Tink") {
             silentSound.volume = 0.0
             silentSound.play()
         }
     }
+    
+    /// Plays custom sound effect.
+    /// - Parameter name: Name of the sound asset (without file extension).
+    /// - Note: Playback may be latenced or corrupted if audio engine not warmed up. See: `warmUpAudioEngine` method.
     static func playSoundEffect(name: String) {
         if let sound = NSSound(named: name) {
             sound.play()
@@ -733,6 +803,7 @@ struct SoundEffects {
     }
 }
 
+/// SwiftUI displaying editable, inline `FileItem` name.
 struct EditableFileNameView: View {
     let file: FileItem
     let isEditing: Bool
@@ -774,6 +845,7 @@ struct EditableFileNameView: View {
         }
     }
     
+    /// Commits file name change if it differs from old name.
     private func commitChange() {
         let trimmed = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty && trimmed != file.url.lastPathComponent {

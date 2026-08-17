@@ -4,6 +4,9 @@ import AppKit
 import CryptoKit
 import UniformTypeIdentifiers
 
+/// View model for directory operations.
+///
+/// Includes folder navigation, file operations, searching and undo management.
 @Observable
 class FolderViewModel {
     var currentDir: URL
@@ -41,6 +44,11 @@ class FolderViewModel {
         }
     }
     
+    /// Registers undo operation in UndoManager class instance.
+    ///
+    /// - Parameters:
+    ///     - actionName: Self-explanatory identifier for undoable action usable in development as `String`.
+    ///     - handler: Closure executing the undo operation on the target view model.
     private func registerUndo(actionName: String, _ handler: @escaping (FolderViewModel) -> Void) {
         undoManager?.registerUndo(withTarget: self, handler: handler)
         undoManager?.setActionName(actionName)
@@ -81,11 +89,19 @@ class FolderViewModel {
         ".xcworkspace"
     ]
     
-    /// 0: sitting loose in Home, or inside a well-known user-content folder (Desktop, Documents, ...)
-    /// 1: elsewhere under Home, nothing suspicious about it
-    /// 2: a dotfile/dot-folder that slipped through (configs, etc.)
-    /// 3: known system/tooling noise (Library, node_modules, .git, caches, build output, Trash...)
-    /// 4: outside the user's Home directory entirely
+    /// Evaluates file URL to determine its revelance tier for search sorting.
+    /// 
+    /// - 0: sitting loose in Home, or inside a well-known user-content folder (Desktop, Documents, ...)
+    /// - 1: elsewhere under Home, nothing suspicious about it
+    /// - 2: a dotfile/dot-folder that slipped through (configs, etc.)
+    /// - 3: known system/tooling noise (Library, node_modules, .git, caches, build output, Trash...)
+    /// - 4: outside the user's Home directory entirely
+    ///
+    /// - Parameters:
+    ///     - url: URL of file to evaluate as `URL`.
+    ///     - homeDir: Absolute path string of user's home directory as `String`.
+    /// - Returns: Integer representing tier ranking (0 highest, 4 lowest) as `Int`.
+    /// - Note: This does not guarantee perfect search results or no "junk files" in them.
     private static func relevanceTier(for url: URL, homeDir: String) -> Int {
         let path = url.path
         guard path.hasPrefix(homeDir) else { return 4 }
@@ -169,6 +185,7 @@ class FolderViewModel {
         }
     }
     
+    /// Triggers search processing or clears previous search states based on the active search scope.
     private func performSearch() {
         let queryText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         
@@ -185,6 +202,9 @@ class FolderViewModel {
         }
     }
     
+    /// Initiates a system-wide Spotlight metadata query for specified text.
+    ///
+    /// - Parameter text: Search text as `String`.
     private func runSpotlightQuery(text: String) {
         if let currentQuery = metadataQuery {
             currentQuery.stop()
@@ -222,6 +242,7 @@ class FolderViewModel {
         query.start()
     }
     
+    /// Receives and processes notifications emmited by `NSMetadataQuery` instance.
     @objc private func handleMetadataQueryNotification(_ notification: Notification) {
         guard let query = notification.object as? NSMetadataQuery,
               query === self.metadataQuery else { return }
@@ -262,6 +283,7 @@ class FolderViewModel {
         }
     }
     
+    /// Loads contents of current directory and updates file list.
     func loadCurrentDirectory() {
         ThumbnailManager.shared.clearCache()
         
@@ -310,12 +332,14 @@ class FolderViewModel {
         }
     }
     
+    /// Navigates into the specified directory.
     func enterDirectory(dir: FileItem) {
         guard dir.itemType == .DIRECTORY else { return }
         currentDir = dir.url
         loadCurrentDirectory()
     }
     
+    /// Navigates one level up in directories tree.
     func goToParentDirectory() {
         let parentDir = currentDir.deletingLastPathComponent()
         if parentDir != currentDir {
@@ -324,6 +348,7 @@ class FolderViewModel {
         }
     }
     
+    /// Creates new directory inside current directory with auto-incrementing name.
     func createNewDirectory() {
         var dirName: String = "New Folder"
         var counter: Int = 1
@@ -348,6 +373,7 @@ class FolderViewModel {
         }
     }
     
+    /// Creates new file inside current directory with auto-incrementing name.
     func createNewFile() {
         var fileName: String = "Untitled.txt"
         var counter: Int = 1
@@ -373,6 +399,10 @@ class FolderViewModel {
         }
     }
     
+    /// Registers undo step for file or directory creation.
+    /// - Parameters:
+    ///     - url: URL of the created item as `URL`.
+    ///     - isDirectory: Indicating wheter the created item is directory as `Bool`.
     private func registerCreateUndo(url: URL, isDirectory: Bool) {
         registerUndo(actionName: isDirectory ? "New Folder" : "New File") { target in
             do {
@@ -385,6 +415,10 @@ class FolderViewModel {
         }
     }
     
+    /// Registers a redo step for recreating previously deleted file or directory.
+    /// - Parameters:
+    ///     - url: URL of item to recreate as `URL`.
+    ///     - isDirectory: Indicating wheter the item is directory as `Bool`.
     private func registerRecreateUndo(url: URL, isDirectory: Bool) {
         registerUndo(actionName: isDirectory ? "New Folder" : "New File") { target in
             do {
@@ -401,6 +435,7 @@ class FolderViewModel {
         }
     }
     
+    /// Copies given files to the system pasteboard.
     func copyFiles(files: [FileItem]) {
         self.pasteboardURLs = files.map { $0.url }
         self.isOperationCut = false
@@ -410,6 +445,7 @@ class FolderViewModel {
         pasteboard.writeObjects(files.map { $0.url as NSURL})
     }
     
+    /// Copies given files to the system pasteboard and flags the operation as cut.
     func cutFiles(files: [FileItem]) {
         self.pasteboardURLs = files.map { $0.url }
         self.isOperationCut = true
@@ -419,6 +455,7 @@ class FolderViewModel {
         pasteboard.writeObjects(files.map { $0.url as NSURL})
     }
     
+    /// Renames a specified `FileItem`.
     func renameFile(file: FileItem, to newName: String) {
         let trimmedNewName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedNewName.isEmpty, trimmedNewName != file.url.lastPathComponent else { return }
@@ -433,6 +470,7 @@ class FolderViewModel {
         }
     }
     
+    /// Moves the specified files to system trash and registers undo operation.
     func moveToTrash(files: [FileItem]) {
         var restorePairs: [(trashed: URL, original: URL)] = []
         for file in files {
@@ -454,6 +492,8 @@ class FolderViewModel {
         registerTrashUndo(restorePairs: restorePairs)
     }
     
+    /// Registers undo step to restore items back from the trash to their original locations.
+    /// - Parameter restorePairs: List of tuples linking the trashed URL with its original path URL.
     private func registerTrashUndo(restorePairs: [(trashed: URL, original: URL)]) {
         registerUndo(actionName: "Move to Trash") { target in
             var restoredURLs: [URL] = []
@@ -470,6 +510,7 @@ class FolderViewModel {
         }
     }
     
+    /// Registers a redo step to move restored items back to the trash.
     private func registerRetrashUndo(originalURLs: [URL]) {
         registerUndo(actionName: "Move to Trash") { target in
             var restorePairs: [(trashed: URL, original: URL)] = []
@@ -487,6 +528,7 @@ class FolderViewModel {
         }
     }
     
+    /// Pastes or moves files from pasteboard into current directory.
     func pasteFiles() {
         let finalURLs: [URL]
         if !pasteboardURLs.isEmpty {
@@ -538,6 +580,10 @@ class FolderViewModel {
         registerPasteUndo(pastedPairs: pastedPairs, wasCut: wasCut)
     }
 
+    /// Handles drag-and-drop file imports into targeted destination directory.
+    /// - Parameters:
+    ///     - urls: Array of file URLs dropped into app's view as `[URL]`.
+    ///     - destinationFolder: Optional custom destination folder (falls back to `currentDir` if not specified) as `URL`.
     func handleDrop(urls: [URL], to destinationFolder: URL? = nil) {
         let targetDir = destinationFolder ?? currentDir
         var hasChanges = false
@@ -601,6 +647,7 @@ class FolderViewModel {
         }
     }
     
+    /// Opens the specified directory URL in system Terminal.
     func openInTerminal(url: URL) {
         let terminalBundleID = "com.apple.Terminal"
         if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: terminalBundleID) {
@@ -611,6 +658,7 @@ class FolderViewModel {
         }
     }
 
+    /// Opens the specified directory URL in VSCode (if installed).
     func openInVSCode(url: URL) {
         let vscodeBundleID = "com.microsoft.VSCode"
         if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: vscodeBundleID) {
@@ -621,6 +669,7 @@ class FolderViewModel {
         }
     }
     
+    /// Copies a shell-escaped string representation of the URL path to the system pasteboard.
     func copyShellEscapedPath(for url: URL) {
         let escapedPath = url.path.replacingOccurrences(of: " ", with: "\\ ")
         let pasteboard = NSPasteboard.general
@@ -628,6 +677,10 @@ class FolderViewModel {
         pasteboard.setString(escapedPath, forType: .string)
     }
     
+    /// Generates SHA256 checksum for selected file asynchronously and copies the hash string to system pasteboard.
+    ///
+    /// - Parameters fileURL: Target file URL as `URL`.
+    /// - Warning: Disabled in main program, didn't work when first implemented. Not for use, issue fixing ongoing.
     static func copySHA256Checksum(for fileURL: URL) {
         DispatchQueue.global(qos: .userInitiated).async {
             guard let data = try? Data(contentsOf: fileURL) else { return }
