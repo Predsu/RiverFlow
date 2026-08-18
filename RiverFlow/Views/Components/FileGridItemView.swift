@@ -2,12 +2,31 @@ import SwiftUI
 
 /// SwiftUI view representing `FileItem` in grid layout.
 ///
-/// Displays a file icon and editable name in grid cell. Supports:
-/// - single click selection
-/// - double click activation
-/// - right-click context menu
-/// - drag-and-drop targeting
-/// - actions from `FileContextMenu`
+/// Displays a file icon and editable name in grid cell with interactive affordances.
+/// The view is a 120x110pt cell that displays the file's thumbnail/icon and name.
+/// Users can interact through single-click selection, double-click activation,
+/// right-click context menus, and drag-and-drop operations.
+///
+/// Supports:
+/// - Single click for selection (with Shift/Command modifiers via parent view)
+/// - Double click to activate (open file or enter directory)
+/// - Right-click context menu (via `FileContextMenu`)
+/// - Drag-and-drop targeting with visual feedback
+/// - Inline name editing (when `viewModel.editingFileID` matches)
+///
+/// - Parameters:
+///   - file: The `FileItem` to display.
+///   - isSelected: Whether this item is currently selected.
+///   - isTargeted: Whether this item is a current drag-and-drop target (default: false).
+///   - onTap: Closure invoked when the cell is single-clicked.
+///   - onRightClick: Closure invoked when right-clicked to show context menu.
+///   - onDoubleTap: Closure invoked when double-clicked to activate.
+///   - onCopy: Closure invoked by context menu for copy operation.
+///   - onCut: Closure invoked by context menu for cut operation.
+///   - onOpenAsDirectory: Closure invoked by context menu to open as directory.
+///   - onRefreshRequired: Closure invoked to refresh the view after operations.
+///   - onMoveToTrash: Closure invoked by context menu for trash operation.
+///   - viewModel: Reference to the folder view model for state management and operations.
 struct FileGridItemView: View {
     let file: FileItem
     let isSelected: Bool
