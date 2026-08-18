@@ -298,7 +298,7 @@ import Testing
             Self.deleteTempDir(at: tempDir)
         }
         
-        let viewModel = FolderViewModel()
+        let viewModel = FolderViewModel(startDir: tempDir)
         
         viewModel.createNewDirectory()
         viewModel.createNewDirectory()
@@ -314,7 +314,7 @@ import Testing
             Self.deleteTempDir(at: tempDir)
         }
         
-        let viewModel = FolderViewModel()
+        let viewModel = FolderViewModel(startDir: tempDir)
         
         viewModel.createNewFile()
         viewModel.createNewFile()
@@ -431,6 +431,145 @@ import Testing
         
         #expect(viewModel.sortedFiles.isEmpty)
     }
+
+    @Test("selectedFiles returns only selected items")
+    func selectedFilesReturnsOnlySelectedItems() throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        FileManager.default.createFile(atPath: tempDir.appendingPathComponent("first.txt").path, contents: nil)
+        FileManager.default.createFile(atPath: tempDir.appendingPathComponent("second.txt").path, contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        let selected = try #require(viewModel.files.first { $0.name == "second.txt" })
+        
+        viewModel.selectedFileIds = [selected.id]
+        
+        #expect(viewModel.selectedFiles.map(\.name) == ["second.txt"])
+    }
+
+    @Test("sortedFiles orders names naturally")
+    func sortedFilesOrdersNamesNaturally() throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        
+        viewModel.files = [
+            FileItem(url: tempDir.appendingPathComponent("file10.txt"), name: "file10.txt", itemType: .FILE, size: 1, modificationDate: nil, isHidden: false),
+            FileItem(url: tempDir.appendingPathComponent("file2.txt"), name: "file2.txt", itemType: .FILE, size: 1, modificationDate: nil, isHidden: false),
+            FileItem(url: tempDir.appendingPathComponent("file1.txt"), name: "file1.txt", itemType: .FILE, size: 1, modificationDate: nil, isHidden: false)
+        ]
+        
+        #expect(viewModel.sortedFiles.map(\.name) == ["file1.txt", "file2.txt", "file10.txt"])
+    }
+
+    @Test("sortedFiles orders by newest modification date and falls back to name")
+    func sortedFilesOrdersByNewestModificationDateAndFallsBackToName() throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        
+        let older = Date(timeIntervalSinceReferenceDate: 100)
+        let newer = Date(timeIntervalSinceReferenceDate: 200)
+        
+        viewModel.files = [
+            FileItem(url: tempDir.appendingPathComponent("file10.txt"), name: "file10.txt", itemType: .FILE, size: 1, modificationDate: older, isHidden: false),
+            FileItem(url: tempDir.appendingPathComponent("file2.txt"), name: "file2.txt", itemType: .FILE, size: 1, modificationDate: older, isHidden: false),
+            FileItem(url: tempDir.appendingPathComponent("file1.txt"), name: "file1.txt", itemType: .FILE, size: 1, modificationDate: newer, isHidden: false)
+        ]
+        
+        viewModel.currentSortingOption = .modificationDate
+        
+        #expect(viewModel.sortedFiles.map(\.name) == ["file1.txt", "file2.txt", "file10.txt"])
+    }
+
+    @Test("sortedFiles orders sized files before folders and by descending size")
+    func sortedFilesOrdersSizedFilesBeforeFoldersAndByDescendingSize() throws {
+        let tempDir = try Self.createTempDir()
+        defer { Self.deleteTempDir(at: tempDir) }
+        let viewModel = FolderViewModel(startDir: tempDir)
+        viewModel.files = [
+            FileItem(url: tempDir.appendingPathComponent("folder"), name: "folder", itemType: .DIRECTORY, size: nil, modificationDate: nil, isHidden: false),
+            FileItem(url: tempDir.appendingPathComponent("small.txt"), name: "small.txt", itemType: .FILE, size: 2, modificationDate: nil, isHidden: false),
+            FileItem(url: tempDir.appendingPathComponent("large.txt"), name: "large.txt", itemType: .FILE, size: 10, modificationDate: nil, isHidden: false)
+        ]
+        viewModel.currentSortingOption = .size
+
+        #expect(viewModel.sortedFiles.map(\.name) == ["large.txt", "small.txt", "folder"])
+    }
+
+    @Test("Creating a file supports undo and redo")
+    func creatingAFileSupportsUndoAndRedo() throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        let undoManager = UndoManager()
+        viewModel.undoManager = undoManager
+        
+        viewModel.createNewFile()
+        #expect(FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("Untitled.txt").path))
+        
+        undoManager.undo()
+        #expect(!FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("Untitled.txt").path))
+        
+        undoManager.redo()
+        #expect(FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("Untitled.txt").path))
+    }
+
+    @Test("Cut then paste moves a file and clears the cut state")
+    func cutThenPasteMovesAFileAndClearsCutState() throws {
+        let sourceDir = try Self.createTempDir()
+        let destDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: sourceDir)
+            Self.deleteTempDir(at: destDir)
+        }
+        let sourceURL = sourceDir.appendingPathComponent("source.txt")
+        FileManager.default.createFile(atPath: sourceURL.path, contents: nil)
+        let sourceViewModel = FolderViewModel(startDir: sourceDir)
+        let item = try #require(sourceViewModel.files.first)
+        sourceViewModel.cutFiles(files: [item])
+        
+        let destViewModel = FolderViewModel(startDir: destDir)
+        destViewModel.pasteboardURLs = sourceViewModel.pasteboardURLs
+        destViewModel.isOperationCut = sourceViewModel.isOperationCut
+        destViewModel.pasteFiles()
+        
+        #expect(!FileManager.default.fileExists(atPath: sourceURL.path))
+        #expect(FileManager.default.fileExists(atPath: destDir.appendingPathComponent("source.txt").path))
+        #expect(destViewModel.pasteboardURLs.isEmpty)
+        #expect(!destViewModel.isOperationCut)
+    }
+
+    @Test("CreateFolderFromSelection moves the selection into a uniquely named folder")
+    func createFolderFromSelectionMovesTheSelectionIntoAUniquelyNamedFolder() throws {
+        let tempDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: tempDir)
+        }
+        try FileManager.default.createDirectory(at: tempDir.appendingPathComponent("New Folder"), withIntermediateDirectories: false)
+        FileManager.default.createFile(atPath: tempDir.appendingPathComponent("one.txt").path, contents: nil)
+        FileManager.default.createFile(atPath: tempDir.appendingPathComponent("two.txt").path, contents: nil)
+        
+        let viewModel = FolderViewModel(startDir: tempDir)
+        viewModel.createFolderFromSelection(files: viewModel.files.filter { $0.name.hasSuffix(".txt") })
+        let groupedFolder = tempDir.appendingPathComponent("New Folder 1")
+        
+        #expect(FileManager.default.fileExists(atPath: groupedFolder.appendingPathComponent("one.txt").path))
+        #expect(FileManager.default.fileExists(atPath: groupedFolder.appendingPathComponent("two.txt").path))
+        #expect(!FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("one.txt").path))
+    }
 }
 
 @Suite struct FileItemTests {
@@ -494,6 +633,13 @@ import Testing
         
         #expect(item.fileExtensionIconText == "")
     }
+
+    @Test("fileExtensionIconText uppercases a file extension")
+    func fileExtensionIconTextUppercasesExtension() {
+        let item = Self.makeItem(url: URL(fileURLWithPath: "/tmp/report.Pdf"))
+
+        #expect(item.fileExtensionIconText == "PDF")
+    }
     
     @Test("Two FileItem instances for the same URL still have distinct identities")
     func twoFileItemInstancesForTheSameURLStillHaveDistinctIdentities() async throws{
@@ -502,5 +648,23 @@ import Testing
         let b = Self.makeItem(url: url)
         
         #expect(a.id != b.id)
+    }
+}
+
+@Suite struct EnumPresentationTests {
+    @Test("Sidebar items expose their display identifiers and icons")
+    func sidebarItemsExposeTheirDisplayIdentifiersAndIcons() {
+        #expect(SideBarItem.home.id == "Home")
+        #expect(SideBarItem.downloads.iconName == "arrow.down.circle")
+        #expect(SideBarItem.mac.url.path == "/")
+    }
+
+    @Test("File view and sorting options expose stable identifiers and icons")
+    func FileViewAndSortingOptionsExposeStableIdentifiersAndIcons() {
+        #expect(FileViewStyle.grid.id == "Grid")
+        #expect(FileViewStyle.list.iconName == "list.bullet")
+        #expect(FileSortOption.size.id == "Size")
+        #expect(FileSortOption.modificationDate.iconName == "calendar")
+        #expect(SearchScope.thisMac.id == "This Mac")
     }
 }
