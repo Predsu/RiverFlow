@@ -153,6 +153,22 @@ struct ContentView: View {
             viewModel.handleDrop(urls: urls)
             return true
         }
+        .alert("Item with this name already exists", isPresented: Binding(
+            get: { viewModel.fileCollision != nil },
+            set: { _ in }
+        ), presenting: viewModel.fileCollision) { collision in
+            Button("Skip", role: .cancel) {
+                viewModel.resolveFileCollision(.skip)
+            }
+            Button("Replace", role: .destructive) {
+                viewModel.resolveFileCollision(.replace)
+            }
+            Button("Keep Both") {
+                viewModel.resolveFileCollision(.keepBoth)
+            }
+        } message: { collision in
+            Text("\"\(collision.destinationURL.lastPathComponent)\" already exists i\"\(collision.destinationURL.deletingLastPathComponent().lastPathComponent)\". Choose whether to replace it or keep botitems.")
+        }
     }
 
     private var sidebarView: some View {
