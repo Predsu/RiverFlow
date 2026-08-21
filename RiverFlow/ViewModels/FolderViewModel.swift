@@ -4,6 +4,13 @@ import AppKit
 import CryptoKit
 import UniformTypeIdentifiers
 
+struct FileCollision: Identifiable {
+    let sourceURL: URL
+    let destinationURL: URL
+    
+    var id: URL { sourceURL }
+}
+
 /// View model for directory operations.
 ///
 /// Includes folder navigation, file operations, searching and undo management.
@@ -35,6 +42,10 @@ class FolderViewModel {
     private var metadataQuery: NSMetadataQuery?
     
     weak var undoManager: UndoManager?
+    
+    var fileCollision: FileCollision?
+    private var pendingDropOperations: [(source: URL, destination: URL)] = []
+    private var dropHadChanges = false
     
     deinit {
         if let query = metadataQuery {
@@ -586,29 +597,89 @@ class FolderViewModel {
     ///     - destinationFolder: Optional custom destination folder (falls back to `currentDir` if not specified) as `URL`.
     func handleDrop(urls: [URL], to destinationFolder: URL? = nil) {
         let targetDir = destinationFolder ?? currentDir
-        var hasChanges = false
-        
-        for sourceURL in urls {
+        pendingDropOperations = urls.compactMap { sourceURL in
             let destinationURL = targetDir.appendingPathComponent(sourceURL.lastPathComponent)
-            if sourceURL.standardizedFileURL == destinationURL.standardizedFileURL {
-                continue
-            }
-            
+            return sourceURL.standardizedFileURL == destinationURL.standardizedFileURL
+                ? nil
+                : (source: sourceURL, destination: destinationURL)
+        }
+        dropHadChanges = false
+        processNextDropOperation()
+    }
+    
+    func resolveFileCollision(_ choice: FileCollisionChoice) {
+        guard let collision = fileCollision else { return }
+        fileCollision = nil
+        
+        switch choice {
+        case .skip:
+            break
+        case .replace:
             do {
-                if sourceURL.path.hasPrefix(NSHomeDirectory()) {
-                    try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
-                } else {
-                    try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-                }
-                hasChanges = true
+                try FileManager.default.removeItem(at: collision.destinationURL)
+                try transferDroppedItem(from: collision.sourceURL, to: collision.destinationURL)
+                dropHadChanges = true
+            } catch {
+                print("Error replacing dropped file: \(error.localizedDescription)")
+            }
+        case .keepBoth:
+            let uniqueDestination = uniqueDropDestination(for: collision.sourceURL, to: collision.destinationURL.deletingLastPathComponent())
+            do {
+                try transferDroppedItem(from: collision.sourceURL, to: uniqueDestination)
+                dropHadChanges = true
+            } catch {
+                print("Error keeping both dropped files: \(error.localizedDescription)")
+            }
+        }
+        
+        DispatchQueue.main.async { [weak self] in
+            self?.processNextDropOperation()
+        }
+    }
+    
+    private func processNextDropOperation() {
+        while !pendingDropOperations.isEmpty {
+            let operation = pendingDropOperations.removeFirst()
+            if FileManager.default.fileExists(atPath: operation.destination.path) {
+                fileCollision = FileCollision(sourceURL: operation.source, destinationURL: operation.destination)
+                return
+            }
+            do {
+                try transferDroppedItem(from: operation.source, to: operation.destination)
+                dropHadChanges = true
             } catch {
                 print("Error handling drop: \(error.localizedDescription)")
             }
         }
-        
-        if hasChanges {
+        if dropHadChanges {
             loadCurrentDirectory()
         }
+    }
+    
+    private func transferDroppedItem(from sourceURL: URL, to destinationURL: URL) throws {
+        if sourceURL.path.hasPrefix(NSHomeDirectory()) {
+            try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
+        } else {
+            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+        }
+    }
+    
+    private func uniqueDropDestination(for sourceURL: URL, to directory: URL) -> URL {
+        let fileExtension = sourceURL.pathExtension
+        let baseName = sourceURL.deletingPathExtension().lastPathComponent
+        var counter = 2
+        var destination = directory.appendingPathComponent("\(baseName) \(counter)")
+        if !fileExtension.isEmpty {
+            destination.appendPathExtension(fileExtension)
+        }
+        while FileManager.default.fileExists(atPath: destination.path) {
+            counter += 1
+            destination = directory.appendingPathComponent("\(baseName) \(counter)")
+            if !fileExtension.isEmpty {
+                destination.appendPathExtension(fileExtension)
+            }
+        }
+        return destination
     }
     
     private func registerPasteUndo(pastedPairs: [(source: URL, destination: URL)], wasCut: Bool) {
