@@ -108,3 +108,9 @@ enum SearchScope: String, CaseIterable, Identifiable {
     
     var id: String { rawValue }
 }
+
+enum FileCollisionChoice {
+    case skip
+    case replace
+    case keepBoth
+}

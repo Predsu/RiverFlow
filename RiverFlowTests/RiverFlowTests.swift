@@ -553,6 +553,101 @@ import SwiftUI
         #expect(!destViewModel.isOperationCut)
     }
 
+    @Test("Dropping same-named item exposes a collision and skip preserves both items")
+    func droppingSameNamedItemExposesACollisionAndSkipPreservesBothItem() throws {
+        let sourceDir = try Self.createTempDir()
+        let destinationDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: sourceDir)
+            Self.deleteTempDir(at: destinationDir)
+        }
+        let sourceURL = sourceDir.appendingPathComponent("untitled.txt")
+        let destinationURL = destinationDir.appendingPathComponent("untitled.txt")
+        FileManager.default.createFile(atPath: sourceURL.path, contents: Data("sourcecontent".utf8))
+        FileManager.default.createFile(atPath: destinationURL.path, contents: Data("destinationcontent".utf8))
+
+        let viewModel = FolderViewModel(startDir: destinationDir)
+        viewModel.handleDrop(urls: [sourceURL])
+
+        #expect(viewModel.fileCollision?.sourceURL == sourceURL)
+        #expect(viewModel.fileCollision?.destinationURL == destinationURL)
+        viewModel.resolveFileCollision(.skip)
+
+        #expect(FileManager.default.fileExists(atPath: sourceURL.path))
+        #expect(try Data(contentsOf: destinationURL) == Data("destinationcontent".utf8))
+        #expect(viewModel.fileCollision == nil)
+    }
+
+    @Test("Replacing a collision overwrites the destination")
+    func replacingACollisionOverwritesTheDestination() throws {
+        let sourceDir = try Self.createTempDir()
+        let destinationDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: sourceDir)
+            Self.deleteTempDir(at: destinationDir)
+        }
+        let sourceURL = sourceDir.appendingPathComponent("untitled.txt")
+        let destinationURL = destinationDir.appendingPathComponent("untitled.txt")
+        FileManager.default.createFile(atPath: sourceURL.path, contents: Data("source".utf8))
+        FileManager.default.createFile(atPath: destinationURL.path, contents: Data("destination".utf8))
+
+        let viewModel = FolderViewModel(startDir: destinationDir)
+        viewModel.handleDrop(urls: [sourceURL])
+        viewModel.resolveFileCollision(.replace)
+
+        #expect(FileManager.default.fileExists(atPath: sourceURL.path))
+        #expect(try Data(contentsOf: destinationURL) == Data("source".utf8))
+    }
+
+    @Test("Keeping both names the dropped item with next available number")
+    func keepingBothNamesTheDroppedItemWithNextAvailableNumber() throws {
+        let sourceDir = try Self.createTempDir()
+        let destinationDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: sourceDir)
+            Self.deleteTempDir(at: destinationDir)
+        }
+        let sourceURL = sourceDir.appendingPathComponent("untitled.txt")
+        FileManager.default.createFile(atPath: sourceURL.path, contents: Data("source".utf8))
+        FileManager.default.createFile(atPath: destinationDir.appendingPathComponent("untitled.txt").path, contents: nil)
+        FileManager.default.createFile(atPath: destinationDir.appendingPathComponent("untitled 2.txt").path, contents: nil)
+
+        let viewModel = FolderViewModel(startDir: destinationDir)
+        viewModel.handleDrop(urls: [sourceURL])
+        viewModel.resolveFileCollision(.keepBoth)
+
+        let renamedDestination = destinationDir.appendingPathComponent("untitled 3.txt")
+        #expect(FileManager.default.fileExists(atPath: sourceURL.path))
+        #expect(try Data(contentsOf: renamedDestination) == Data("source".utf8))
+    }
+
+    @Test("Multi-item drop presents each collision in sequence")
+    @MainActor
+    func multiItemDropPresentsEachCollisionInSequence() async throws {
+        let sourceDir = try Self.createTempDir()
+        let destinationDir = try Self.createTempDir()
+        defer {
+            Self.deleteTempDir(at: sourceDir)
+            Self.deleteTempDir(at: destinationDir)
+        }
+        let firstSource = sourceDir.appendingPathComponent("first.txt")
+        let secondSource = sourceDir.appendingPathComponent("second.txt")
+        FileManager.default.createFile(atPath: firstSource.path, contents: nil)
+        FileManager.default.createFile(atPath: secondSource.path, contents: nil)
+        FileManager.default.createFile(atPath: destinationDir.appendingPathComponent("first.txt").path, contents: nil)
+        FileManager.default.createFile(atPath: destinationDir.appendingPathComponent("second.txt").path, contents: nil)
+
+        let viewModel = FolderViewModel(startDir: destinationDir)
+        viewModel.handleDrop(urls: [firstSource, secondSource])
+        #expect(viewModel.fileCollision?.sourceURL == firstSource)
+
+        viewModel.resolveFileCollision(.skip)
+        await Task.yield()
+
+        #expect(viewModel.fileCollision?.sourceURL == secondSource)
+        viewModel.resolveFileCollision(.skip)
+    }
+
     @Test("CreateFolderFromSelection moves the selection into a uniquely named folder")
     func createFolderFromSelectionMovesTheSelectionIntoAUniquelyNamedFolder() throws {
         let tempDir = try Self.createTempDir()
