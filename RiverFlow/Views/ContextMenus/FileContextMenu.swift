@@ -98,6 +98,51 @@ struct FileContextMenu: View {
                 Image(systemName: "doc.on.doc")
             }
             
+            if viewModel.isGitRepo {
+                Divider()
+                
+                if viewModel.isFileUnstaged(url: file.url) {
+                    Button(action: {
+                        viewModel.gitStage(file: file)
+                    }) {
+                        Text("Git Stage")
+                        Image(systemName: "plus.circle")
+                    }
+                    
+                    Button(action: {
+                        viewModel.gitDiscard(file: file)
+                    }) {
+                        Text("Git Discard")
+                        Image(systemName: "arrow.counterclockwise.circle")
+                    }
+                }
+                
+                if viewModel.isFileStaged(url: file.url) {
+                    Button(action: {
+                        viewModel.gitUnstage(file: file)
+                    }) {
+                        Text("Git Unstage")
+                        Image(systemName: "minus.circle")
+                    }
+                }
+                
+                Button(action: {
+                    viewModel.copyGitRelativePath(for: file.url)
+                }) {
+                    Text("Copy Git Relative Path")
+                    Image(systemName: "doc.on.doc.fill")
+                }
+                
+                if viewModel.getGitHubOrGitLabURL(for: file.url) != nil {
+                    Button(action: {
+                        viewModel.openInGitHubOrGitLab(file: file)
+                    }) {
+                        Text("Open on GitHub / GitLab")
+                        Image(systemName: "globe")
+                    }
+                }
+            }
+            
             Divider()
             
             Button(action: onMoveToTrash) {
