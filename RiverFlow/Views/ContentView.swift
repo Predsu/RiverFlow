@@ -93,6 +93,7 @@ struct ContentView: View {
     @State private var showSplash = !SplashOverlay.hasShownSplashInThisSession
     @State private var dropTargetedFileId: UUID? = nil
     @State private var isMoveUpTargeted = false
+    @State private var windowWidth: CGFloat = 0
     
     let gridCols = [
         GridItem(.adaptive(minimum: 130), spacing: 16)
@@ -169,6 +170,11 @@ struct ContentView: View {
         } message: { collision in
             Text("\"\(collision.destinationURL.lastPathComponent)\" already exists i\"\(collision.destinationURL.deletingLastPathComponent().lastPathComponent)\". Choose whether to replace it or keep botitems.")
         }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { newWidth in
+            windowWidth = newWidth
+        }
     }
 
     private var sidebarView: some View {
@@ -218,6 +224,20 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button(action: {
+                    viewModel.goBackward()
+                }) {
+                    Image(systemName: "chevron.left")
+                }
+                .disabled(viewModel.historyBackward.isEmpty)
+                .help("Go Back")
+                Button(action: {
+                    viewModel.goForward()
+                }) {
+                    Image(systemName: "chevron.right")
+                }
+                .disabled(viewModel.historyForward.isEmpty)
+                .help("Go Forward")
+                Button(action: {
                     guard viewModel.currentDir.path != "/" else { return }
                     viewModel.goToParentDirectory()
                     goUpTrigger += 1
@@ -264,7 +284,8 @@ struct ContentView: View {
             ToolbarItem(placement: .navigation) {
                 InteractivePathTitleView(
                     fullPath: viewModel.currentDir.path,
-                    folderName: viewModel.currentDirName
+                    folderName: viewModel.currentDirName,
+                    width: $windowWidth
                 )
             }
             

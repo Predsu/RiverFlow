@@ -8,6 +8,8 @@ struct InteractivePathTitleView: View {
     @State private var isHoveringPath = false
     @State private var showCopyFeedback = false
     
+    @Binding var width: CGFloat
+    
     var body: some View {
         HStack(spacing: 6) {
             if isHoveringPath {
@@ -15,7 +17,7 @@ struct InteractivePathTitleView: View {
                     .font(.headline)
                     .foregroundColor(.primary)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(.head)
                     .transition(.asymmetric(insertion: .opacity.animation(.easeInOut(duration: 0.2)),
                                             removal: .identity))
             } else {
@@ -37,7 +39,7 @@ struct InteractivePathTitleView: View {
         .padding(.horizontal, 8)
         .background(isHoveringPath ? Color(NSColor.quaternaryLabelColor) : Color.clear)
         .cornerRadius(4)
-        .frame(minWidth: 140, maxWidth: 310, alignment: .leading)
+        .frame(minWidth: 140, maxWidth: (width * 0.35), alignment: .leading)
         .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isHoveringPath)
         .contentShape(Rectangle())
         .onHover { hovering in
