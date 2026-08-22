@@ -47,7 +47,15 @@ struct FileGridItemView: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            FileIconView(file: file, baseSize: 64)
+            ZStack(alignment: .topTrailing) {
+                FileIconView(file: file, baseSize: 64)
+                
+                if let status = viewModel.gitStatusMap[file.url.standardizedFileURL] {
+                    GitBadgeView(status: status)
+                        .offset(x: 8, y: -4)
+                        .shadow(radius: 1)
+                }
+            }
 //            Text(file.name)
 //                .font(.system(size: 12))
 //                .lineLimit(2)

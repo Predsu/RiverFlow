@@ -467,6 +467,54 @@ struct ContentView: View {
             }
             .padding()
         }
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                if viewModel.isGitRepo, let branch = viewModel.gitBranch {
+                    HStack(spacing: 4) {
+                        Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                            .imageScale(.small)
+                        
+                        Menu {
+                            ForEach(viewModel.gitBranches, id: \.self) { branchName in
+                                Button(action: {
+                                    viewModel.checkoutBranch(name: branchName)
+                                }) {
+                                    HStack {
+                                        Text(branchName)
+                                        if branchName == branch {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Text(branch)
+                                .fontWeight(.semibold)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        
+                        if viewModel.gitUncommitedCount > 0 {
+                            Text("(\(viewModel.gitUncommitedCount) uncommited)")
+                                .foregroundStyle(.orange)
+                        } else {
+                            Text("(all committed)")
+                                .foregroundStyle(.green)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 12)
+                }
+                Spacer()
+                Text("\(viewModel.itemCountText)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+            }
+            .padding(.vertical, 6)
+            .background(.bar)
+        }
         .coordinateSpace(name: "fileGridArea")
         .onPreferenceChange(FileFramePreferenceKey.self) { frames in
             fileFrames = frames
