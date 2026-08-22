@@ -26,6 +26,9 @@ class FolderViewModel {
     var pasteboardURLs: [URL] = []
     var isOperationCut: Bool = false
     
+    var historyBackward: [URL] = []
+    var historyForward: [URL] = []
+    
     var searchText = "" {
         didSet {
             performSearch()
@@ -346,6 +349,8 @@ class FolderViewModel {
     /// Navigates into the specified directory.
     func enterDirectory(dir: FileItem) {
         guard dir.itemType == .DIRECTORY else { return }
+        historyBackward.append(currentDir)
+        historyForward.removeAll()
         currentDir = dir.url
         loadCurrentDirectory()
     }
@@ -354,9 +359,25 @@ class FolderViewModel {
     func goToParentDirectory() {
         let parentDir = currentDir.deletingLastPathComponent()
         if parentDir != currentDir {
+            historyBackward.append(currentDir)
+            historyForward.removeAll()
             currentDir = parentDir
             loadCurrentDirectory()
         }
+    }
+    
+    func goBackward() {
+        guard let previous = historyBackward.popLast() else { return }
+        historyForward.append(currentDir)
+        currentDir = previous
+        loadCurrentDirectory()
+    }
+    
+    func goForward() {
+        guard let next = historyForward.popLast() else { return }
+        historyBackward.append(currentDir)
+        currentDir = next
+        loadCurrentDirectory()
     }
     
     /// Creates new directory inside current directory with auto-incrementing name.
