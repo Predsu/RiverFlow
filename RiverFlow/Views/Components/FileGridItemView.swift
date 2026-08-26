@@ -41,6 +41,8 @@ struct FileGridItemView: View {
     let onMoveToTrash: () -> Void
     var viewModel: FolderViewModel
     
+    @State private var showingDiscardConfirmation = false
+    
     var isEditing: Bool {
         viewModel.editingFileID == file.id
     }
@@ -56,11 +58,6 @@ struct FileGridItemView: View {
                         .shadow(radius: 1)
                 }
             }
-//            Text(file.name)
-//                .font(.system(size: 12))
-//                .lineLimit(2)
-//                .multilineTextAlignment(.center)
-//                .frame(height: 32, alignment: .top)
             EditableFileNameView(
                 file: file,
                 isEditing: isEditing,
@@ -114,8 +111,23 @@ struct FileGridItemView: View {
                 onOpenAsDirectory: onOpenAsDirectory,
                 onCopy: onCopy,
                 onCut: onCut,
-                onMoveToTrash: onMoveToTrash
+                onMoveToTrash: onMoveToTrash,
+                onDiscard: {
+                    showingDiscardConfirmation = true
+                }
             )
+        }
+        .confirmationDialog(
+            "Are you sure you want to discard changes for \"\(file.name)\"?",
+            isPresented: $showingDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) {
+                viewModel.gitDiscard(file: file)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will revert all uncommitted changes in this file.")
         }
     }
 }

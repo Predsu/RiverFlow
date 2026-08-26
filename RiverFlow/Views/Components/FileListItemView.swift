@@ -21,6 +21,8 @@ struct FileListItemView: View {
     let onRefreshRequired: () -> Void
     let onMoveToTrash: () -> Void
     let viewModel: FolderViewModel
+    
+    @State private var showingDiscardConfirmation = false
 
     var body: some View {
         HStack {
@@ -76,7 +78,10 @@ struct FileListItemView: View {
                 onOpenAsDirectory: onOpenAsDirectory,
                 onCopy: onCopy,
                 onCut: onCut,
-                onMoveToTrash: onMoveToTrash
+                onMoveToTrash: onMoveToTrash,
+                onDiscard: {
+                    showingDiscardConfirmation = true
+                }
             )
         }
     }
