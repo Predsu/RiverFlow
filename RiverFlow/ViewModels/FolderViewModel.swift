@@ -19,6 +19,7 @@ class FolderViewModel {
     var currentDir: URL
     var files: [FileItem] = []
     var currentSortingOption: FileSortOption = .name
+    var sidebarRoots: [SidebarNode] = []
     
     var editingFileID: UUID? = nil
     var selectedFileIds: Set<UUID> = []
@@ -97,6 +98,9 @@ class FolderViewModel {
     
     init(startDir: URL = URL(fileURLWithPath: NSHomeDirectory())) {
         self.currentDir = startDir
+        self.sidebarRoots = SideBarItem.allCases.map { item in
+            SidebarNode(name: item.rawValue, url: item.url, iconName: item.iconName, isRoot: true)
+        }
         loadCurrentDirectory()
     }
     
@@ -351,10 +355,57 @@ class FolderViewModel {
             
             updateStatusBar()
             updateGitStatus()
+            reloadSidebarTree()
+            expandToURL(currentDir)
         } catch {
             print("Error while reading directory \(error.localizedDescription)")
             self.files = []
         }
+    }
+    
+    /// Reloads the loaded folders in the sidebar tree.
+    func reloadSidebarTree() {
+        for root in sidebarRoots {
+            if root.isLoaded {
+                root.reloadChildren(showHidden: showHiddenFiles)
+            }
+        }
+    }
+    
+    /// Recursively traverses and expands the sidebar nodes leading to the target URL.
+    func expandToURL(_ targetURL: URL) {
+        let target = targetURL.standardizedFileURL
+        for root in sidebarRoots {
+            if isParent(parent: root.url, child: target) {
+                var current = root
+                while current.url != target {
+                    current.isExpanded = true
+                    current.loadChildren(showHidden: showHiddenFiles)
+                    
+                    if let nextNode = current.children.first(where: { isParent(parent: $0.url, child: target) }) {
+                        current = nextNode
+                    } else {
+                        break
+                    }
+                }
+            }
+        }
+    }
+    
+    private func isParent(parent: URL, child: URL) -> Bool {
+        let parentPath = parent.standardizedFileURL.path
+        let childPath = child.standardizedFileURL.path
+        
+        if parentPath == childPath {
+            return true
+        }
+        
+        if parentPath == "/" {
+            return true
+        }
+        
+        let prefix = parentPath.hasSuffix("/") ? parentPath : parentPath + "/"
+        return childPath.hasPrefix(prefix)
     }
     
     /// Navigates into the specified directory.
