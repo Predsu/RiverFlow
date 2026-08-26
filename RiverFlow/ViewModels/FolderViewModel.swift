@@ -34,7 +34,7 @@ class FolderViewModel {
     var itemCountText: String = ""
     
     var gitBranch: String? = nil
-    var gitUncommitedCount: Int = 0
+    var gitUncommittedCount: Int = 0
     var isGitRepo: Bool = false
     var gitStatusMap: [URL: String] = [:]
     var gitBranches: [String] = []
@@ -948,18 +948,20 @@ class FolderViewModel {
         process.currentDirectoryURL = directory ?? currentDir
         
         let pipe = Pipe()
+        let errorPipe = Pipe()
         process.standardOutput = pipe
-        process.standardError = Pipe()
+        process.standardError = errorPipe
         
         do {
             try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            _ = errorPipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
 
             guard process.terminationStatus == 0 else {
                 return nil
             }
             
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8) {
                 return output.trimmingCharacters(in: .whitespacesAndNewlines)
             }
@@ -980,7 +982,7 @@ class FolderViewModel {
                     guard self.currentDir == directoryToCheck else { return }
                     self.isGitRepo = false
                     self.gitBranch = nil
-                    self.gitUncommitedCount = 0
+                    self.gitUncommittedCount = 0
                     self.gitStatusMap = [:]
                     self.gitBranches = []
                 }
@@ -992,14 +994,14 @@ class FolderViewModel {
             let branch = self.runGitCommand(args: ["branch", "--show-current"], in: directoryToCheck)
             
             var newStatusMap: [URL: String] = [:]
-            var uncommitedCount = 0
+            var uncommittedCount = 0
             
             if let statusOutput = self.runGitCommand(args: ["status", "--porcelain"], in: directoryToCheck) {
                 let lines = statusOutput.components(separatedBy: .newlines)
                 
                 for line in lines {
                     guard line.count >= 4 else { continue }
-                    uncommitedCount += 1
+                    uncommittedCount += 1
                     
                     let startIndex = line.startIndex
                     let x = line[startIndex]
@@ -1061,7 +1063,7 @@ class FolderViewModel {
                 guard self.currentDir == directoryToCheck else { return }
                 self.isGitRepo = true
                 self.gitBranch = branch
-                self.gitUncommitedCount = uncommitedCount
+                self.gitUncommittedCount = uncommittedCount
                 self.gitStatusMap = propagatedMap
                 self.gitBranches = branches
             }
@@ -1123,11 +1125,10 @@ class FolderViewModel {
     }
     
     func gitDiscard(file: FileItem) {
+        let status = gitStatusMap[file.url.standardizedFileURL]
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            
-            let status = self.gitStatusMap[file.url.standardizedFileURL]
-            if status == "U" {
+            if status == "??" {
                 DispatchQueue.main.async {
                     do {
                         try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)

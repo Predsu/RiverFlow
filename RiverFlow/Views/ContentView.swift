@@ -493,9 +493,11 @@ struct ContentView: View {
                         }
                         .menuStyle(.borderlessButton)
                         .fixedSize()
+                        .disabled(viewModel.gitUncommittedCount > 0)
+                        .help(viewModel.gitUncommittedCount > 0 ? "Cannot switch branches with uncommitted changes" : "Switch Git Branch")
                         
-                        if viewModel.gitUncommitedCount > 0 {
-                            Text("(\(viewModel.gitUncommitedCount) uncommited)")
+                        if viewModel.gitUncommittedCount > 0 {
+                            Text("(\(viewModel.gitUncommittedCount) uncommitted)")
                                 .foregroundStyle(.orange)
                         } else {
                             Text("(all committed)")

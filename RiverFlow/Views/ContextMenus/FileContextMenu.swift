@@ -1,8 +1,6 @@
 import SwiftUI
 
 /// SwiftUI context menu containing actions for `FileItem`.
-///
-/// Provides opening, copying, cutting, renaming, compressing, trashing.
 struct FileContextMenu: View {
     let file: FileItem
     let viewModel: FolderViewModel
@@ -11,6 +9,7 @@ struct FileContextMenu: View {
     let onCopy: () -> Void
     let onCut: () -> Void
     let onMoveToTrash: () -> Void
+    let onDiscard: () -> Void
 
     var body: some View {
         Group {
@@ -98,7 +97,7 @@ struct FileContextMenu: View {
                 Image(systemName: "doc.on.doc")
             }
             
-            if viewModel.isGitRepo {
+            if viewModel.isGitRepo && file.itemType == .FILE {
                 Divider()
                 
                 if viewModel.isFileUnstaged(url: file.url) {
@@ -109,9 +108,7 @@ struct FileContextMenu: View {
                         Image(systemName: "plus.circle")
                     }
                     
-                    Button(action: {
-                        viewModel.gitDiscard(file: file)
-                    }) {
+                    Button(role: .destructive, action: onDiscard) {
                         Text("Git Discard")
                         Image(systemName: "arrow.counterclockwise.circle")
                     }
