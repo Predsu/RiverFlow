@@ -41,18 +41,23 @@ struct FileGridItemView: View {
     let onMoveToTrash: () -> Void
     var viewModel: FolderViewModel
     
+    @State private var showingDiscardConfirmation = false
+    
     var isEditing: Bool {
         viewModel.editingFileID == file.id
     }
     
     var body: some View {
         VStack(spacing: 8) {
-            FileIconView(file: file, baseSize: 64)
-//            Text(file.name)
-//                .font(.system(size: 12))
-//                .lineLimit(2)
-//                .multilineTextAlignment(.center)
-//                .frame(height: 32, alignment: .top)
+            ZStack(alignment: .topTrailing) {
+                FileIconView(file: file, baseSize: 64)
+                
+                if let status = viewModel.gitStatusMap[file.url.standardizedFileURL] {
+                    GitBadgeView(status: status)
+                        .offset(x: 8, y: -4)
+                        .shadow(radius: 1)
+                }
+            }
             EditableFileNameView(
                 file: file,
                 isEditing: isEditing,
@@ -106,8 +111,23 @@ struct FileGridItemView: View {
                 onOpenAsDirectory: onOpenAsDirectory,
                 onCopy: onCopy,
                 onCut: onCut,
-                onMoveToTrash: onMoveToTrash
+                onMoveToTrash: onMoveToTrash,
+                onDiscard: {
+                    showingDiscardConfirmation = true
+                }
             )
+        }
+        .confirmationDialog(
+            "Are you sure you want to discard changes for \"\(file.name)\"?",
+            isPresented: $showingDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) {
+                viewModel.gitDiscard(file: file)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will revert all uncommitted changes in this file.")
         }
     }
 }
