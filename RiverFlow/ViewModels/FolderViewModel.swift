@@ -19,6 +19,7 @@ class FolderViewModel {
     var currentDir: URL
     var files: [FileItem] = []
     var currentSortingOption: FileSortOption = .name
+    var sidebarRoots: [SidebarNode] = []
     
     var editingFileID: UUID? = nil
     var selectedFileIds: Set<UUID> = []
@@ -28,6 +29,15 @@ class FolderViewModel {
     
     var historyBackward: [URL] = []
     var historyForward: [URL] = []
+    
+    var availableDiskSpace: String = ""
+    var itemCountText: String = ""
+    
+    var gitBranch: String? = nil
+    var gitUncommittedCount: Int = 0
+    var isGitRepo: Bool = false
+    var gitStatusMap: [URL: String] = [:]
+    var gitBranches: [String] = []
     
     var searchText = "" {
         didSet {
@@ -88,6 +98,9 @@ class FolderViewModel {
     
     init(startDir: URL = URL(fileURLWithPath: NSHomeDirectory())) {
         self.currentDir = startDir
+        self.sidebarRoots = SideBarItem.allCases.map { item in
+            SidebarNode(name: item.rawValue, url: item.url, iconName: item.iconName, isRoot: true)
+        }
         loadCurrentDirectory()
     }
     
@@ -340,10 +353,59 @@ class FolderViewModel {
             
             self.files = mappedFiles
             
+            updateStatusBar()
+            updateGitStatus()
+            reloadSidebarTree()
+            expandToURL(currentDir)
         } catch {
             print("Error while reading directory \(error.localizedDescription)")
             self.files = []
         }
+    }
+    
+    /// Reloads the loaded folders in the sidebar tree.
+    func reloadSidebarTree() {
+        for root in sidebarRoots {
+            if root.isLoaded {
+                root.reloadChildren(showHidden: showHiddenFiles)
+            }
+        }
+    }
+    
+    /// Recursively traverses and expands the sidebar nodes leading to the target URL.
+    func expandToURL(_ targetURL: URL) {
+        let target = targetURL.standardizedFileURL
+        for root in sidebarRoots {
+            if isParent(parent: root.url, child: target) {
+                var current = root
+                while current.url != target {
+                    current.isExpanded = true
+                    current.loadChildren(showHidden: showHiddenFiles)
+                    
+                    if let nextNode = current.children.first(where: { isParent(parent: $0.url, child: target) }) {
+                        current = nextNode
+                    } else {
+                        break
+                    }
+                }
+            }
+        }
+    }
+    
+    private func isParent(parent: URL, child: URL) -> Bool {
+        let parentPath = parent.standardizedFileURL.path
+        let childPath = child.standardizedFileURL.path
+        
+        if parentPath == childPath {
+            return true
+        }
+        
+        if parentPath == "/" {
+            return true
+        }
+        
+        let prefix = parentPath.hasSuffix("/") ? parentPath : parentPath + "/"
+        return childPath.hasPrefix(prefix)
     }
     
     /// Navigates into the specified directory.
@@ -876,6 +938,269 @@ class FolderViewModel {
             loadCurrentDirectory()
         } catch {
             print("Error creating folder from selection: \(error.localizedDescription)")
+        }
+    }
+    
+    private func runGitCommand(args: [String], in directory: URL? = nil) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+        process.arguments = ["git"] + args
+        process.currentDirectoryURL = directory ?? currentDir
+        
+        let pipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = errorPipe
+        
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            _ = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+
+            guard process.terminationStatus == 0 else {
+                return nil
+            }
+            
+            if let output = String(data: data, encoding: .utf8) {
+                return output.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        } catch {
+            return nil
+        }
+        return nil
+    }
+    
+    func updateGitStatus() {
+        let directoryToCheck = currentDir
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            guard let gitRootPath = self.runGitCommand(args: ["rev-parse", "--show-toplevel"], in: directoryToCheck) else {
+                DispatchQueue.main.async {
+                    guard self.currentDir == directoryToCheck else { return }
+                    self.isGitRepo = false
+                    self.gitBranch = nil
+                    self.gitUncommittedCount = 0
+                    self.gitStatusMap = [:]
+                    self.gitBranches = []
+                }
+                return
+            }
+            
+            let gitRootURL = URL(fileURLWithPath: gitRootPath).standardizedFileURL
+            
+            let branch = self.runGitCommand(args: ["branch", "--show-current"], in: directoryToCheck)
+            
+            var newStatusMap: [URL: String] = [:]
+            var uncommittedCount = 0
+            
+            if let statusOutput = self.runGitCommand(args: ["status", "--porcelain"], in: directoryToCheck) {
+                let lines = statusOutput.components(separatedBy: .newlines)
+                
+                for line in lines {
+                    guard line.count >= 4 else { continue }
+                    uncommittedCount += 1
+                    
+                    let startIndex = line.startIndex
+                    let x = line[startIndex]
+                    let y = line[line.index(after: startIndex)]
+                    
+                    let pathPart = String(line[line.index(startIndex, offsetBy: 3)...])
+                    
+                    let relativePath: String
+                    if pathPart.contains(" -> ") {
+                        relativePath = pathPart.components(separatedBy: " -> ").last?
+                            .trimmingCharacters(in: .whitespacesAndNewlines) ?? pathPart
+                    } else {
+                        relativePath = pathPart.trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                    
+                    let code = String(x) + String(y)
+                    let fileURL = gitRootURL.appendingPathComponent(relativePath).standardizedFileURL
+                    newStatusMap[fileURL] = code
+                }
+            }
+            
+            var propagatedMap = newStatusMap
+            for (fileURL, code) in newStatusMap {
+                let folderCode: String
+                if code.contains("M") || code.contains("D") {
+                    folderCode = " m"
+                } else if code.contains("A") {
+                    folderCode = " a"
+                } else {
+                    folderCode = "??"
+                }
+                
+                var parentURL = fileURL.deletingLastPathComponent().standardizedFileURL
+                while parentURL.path.hasPrefix(gitRootURL.path) && parentURL != gitRootURL {
+                    let currentPropagatedCode = propagatedMap[parentURL]
+                    
+                    if currentPropagatedCode == nil {
+                        propagatedMap[parentURL] = folderCode
+                    } else {
+                        if folderCode.contains("m") {
+                            propagatedMap[parentURL] = " m"
+                        } else if folderCode.contains("a") && !(currentPropagatedCode?.contains("m") ?? false) {
+                            propagatedMap[parentURL] = " a"
+                        }
+                    }
+                    
+                    let nextParent = parentURL.deletingLastPathComponent().standardizedFileURL
+                    if nextParent == parentURL { break }
+                    parentURL = nextParent
+                }
+            }
+            
+            let branches = self.runGitCommand(args: ["branch", "--format=%(refname:short)"], in: directoryToCheck)?
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty } ?? []
+            
+            DispatchQueue.main.async {
+                guard self.currentDir == directoryToCheck else { return }
+                self.isGitRepo = true
+                self.gitBranch = branch
+                self.gitUncommittedCount = uncommittedCount
+                self.gitStatusMap = propagatedMap
+                self.gitBranches = branches
+            }
+        }
+    }
+    
+    func isFileStaged(url: URL) -> Bool {
+        guard let code = gitStatusMap[url.standardizedFileURL], code.count == 2 else { return false }
+        let x = code[code.startIndex]
+        return x != " " && x != "?"
+    }
+    
+    func isFileUnstaged(url: URL) -> Bool {
+        guard let code = gitStatusMap[url.standardizedFileURL], code.count == 2 else { return false }
+        let x = code[code.startIndex]
+        let y = code[code.index(after: code.startIndex)]
+        return y != " " || (x == "?" && y == "?")
+    }
+    
+    private func updateStatusBar() {
+        let count = files.count
+        itemCountText = "\(count) item\(count == 1 ? "" : "s")"
+        
+        do {
+            let vals = try currentDir.resourceValues(forKeys: [.volumeAvailableCapacityKey])
+            if let capacity = vals.volumeAvailableCapacity {
+                let formatter = ByteCountFormatter()
+                formatter.allowedUnits = [.useAll]
+                formatter.countStyle = .file
+                availableDiskSpace = formatter.string(fromByteCount: Int64(capacity)) + " available"
+            } else {
+                availableDiskSpace = ""
+            }
+        } catch {
+            availableDiskSpace = ""
+        }
+    }
+    
+    func gitStage(file: FileItem) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            _ = self.runGitCommand(args: ["add", file.url.path])
+            self.updateGitStatus()
+            DispatchQueue.main.async {
+                self.loadCurrentDirectory()
+            }
+        }
+    }
+    
+    func gitUnstage(file: FileItem) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            _ = self.runGitCommand(args: ["restore", "--staged", file.url.path])
+            self.updateGitStatus()
+            DispatchQueue.main.async {
+                self.loadCurrentDirectory()
+            }
+        }
+    }
+    
+    func gitDiscard(file: FileItem) {
+        let status = gitStatusMap[file.url.standardizedFileURL]
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            if status == "??" {
+                DispatchQueue.main.async {
+                    do {
+                        try FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
+                        self.loadCurrentDirectory()
+                    } catch {
+                        print("Error trashing untracked file: \(error.localizedDescription)")
+                    }
+                }
+            } else {
+                _ = self.runGitCommand(args: ["restore", file.url.path])
+                self.updateGitStatus()
+                DispatchQueue.main.async {
+                    self.loadCurrentDirectory()
+                }
+            }
+        }
+    }
+    
+    func copyGitRelativePath(for url: URL) {
+        guard let gitRootPath = runGitCommand(args: ["rev-parse", "--show-toplevel"]) else { return }
+        let gitRootURL = URL(fileURLWithPath: gitRootPath).standardizedFileURL
+        var relativePath = url.standardizedFileURL.path.replacingOccurrences(of: gitRootURL.path + "/", with: "")
+        if relativePath == gitRootURL.path {
+            relativePath = "."
+        }
+        
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(relativePath, forType: .string)
+    }
+    
+    func getGitHubOrGitLabURL(for url: URL) -> URL? {
+        guard let remoteURLString = runGitCommand(args: ["config", "--get", "remote.origin.url"]) else { return nil }
+        guard let gitRootPath = runGitCommand(args: ["rev-parse", "--show-toplevel"]) else { return nil }
+        
+        let gitRootURL = URL(fileURLWithPath: gitRootPath).standardizedFileURL
+        let fileRelativePath = url.standardizedFileURL.path.replacingOccurrences(of: gitRootURL.path + "/", with: "")
+        let branch = runGitCommand(args: ["branch", "--show-current"]) ?? "unknown"
+        
+        var webURLString = remoteURLString
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "git@", with: "https://")
+            .replacingOccurrences(of: "ssh://", with: "")
+            .replacingOccurrences(of: "https://github.com:", with: "https://github.com/")
+            .replacingOccurrences(of: "https://gitlab.com:", with: "https://gitlab.com/")
+        
+        if webURLString.hasSuffix(".git") {
+            webURLString = String(webURLString.dropLast(4))
+        }
+        
+        let separator = webURLString.contains("gitlab.com") ? "/-/blob/" : "/blob/"
+        
+        guard let encodedPath = fileRelativePath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { return nil }
+        let finalURLString = "\(webURLString)\(separator)\(branch)/\(encodedPath)"
+        
+        return URL(string: finalURLString)
+    }
+    
+    func openInGitHubOrGitLab(file: FileItem) {
+        if let webURL = getGitHubOrGitLabURL(for: file.url) {
+            NSWorkspace.shared.open(webURL)
+        }
+    }
+    
+    func checkoutBranch(name: String) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            _ = self.runGitCommand(args: ["checkout", name])
+            self.updateGitStatus()
+            DispatchQueue.main.async {
+                self.loadCurrentDirectory()
+            }
         }
     }
 }

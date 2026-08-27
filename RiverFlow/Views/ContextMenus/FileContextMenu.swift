@@ -1,8 +1,6 @@
 import SwiftUI
 
 /// SwiftUI context menu containing actions for `FileItem`.
-///
-/// Provides opening, copying, cutting, renaming, compressing, trashing.
 struct FileContextMenu: View {
     let file: FileItem
     let viewModel: FolderViewModel
@@ -11,6 +9,7 @@ struct FileContextMenu: View {
     let onCopy: () -> Void
     let onCut: () -> Void
     let onMoveToTrash: () -> Void
+    let onDiscard: () -> Void
 
     var body: some View {
         Group {
@@ -96,6 +95,49 @@ struct FileContextMenu: View {
             }) {
                 Text("Copy File Path")
                 Image(systemName: "doc.on.doc")
+            }
+            
+            if viewModel.isGitRepo && file.itemType == .FILE {
+                Divider()
+                
+                if viewModel.isFileUnstaged(url: file.url) {
+                    Button(action: {
+                        viewModel.gitStage(file: file)
+                    }) {
+                        Text("Git Stage")
+                        Image(systemName: "plus.circle")
+                    }
+                    
+                    Button(role: .destructive, action: onDiscard) {
+                        Text("Git Discard")
+                        Image(systemName: "arrow.counterclockwise.circle")
+                    }
+                }
+                
+                if viewModel.isFileStaged(url: file.url) {
+                    Button(action: {
+                        viewModel.gitUnstage(file: file)
+                    }) {
+                        Text("Git Unstage")
+                        Image(systemName: "minus.circle")
+                    }
+                }
+                
+                Button(action: {
+                    viewModel.copyGitRelativePath(for: file.url)
+                }) {
+                    Text("Copy Git Relative Path")
+                    Image(systemName: "doc.on.doc.fill")
+                }
+                
+                if viewModel.getGitHubOrGitLabURL(for: file.url) != nil {
+                    Button(action: {
+                        viewModel.openInGitHubOrGitLab(file: file)
+                    }) {
+                        Text("Open on GitHub / GitLab")
+                        Image(systemName: "globe")
+                    }
+                }
             }
             
             Divider()

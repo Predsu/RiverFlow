@@ -81,7 +81,7 @@ struct GridContextMenu: View {
 struct ContentView: View {
     @Environment(\.undoManager) private var undoManager
     @State private var viewModel = FolderViewModel()
-    @State private var selectedSideBarItem: SideBarItem? = .home
+    @State private var selectedFolderURL: URL? = SideBarItem.home.url.standardizedFileURL
     @State private var selectedFileViewStyle: FileViewStyle = .grid
     @State private var refreshTrigger = 0
     @State private var goUpTrigger = 0
@@ -134,12 +134,18 @@ struct ContentView: View {
         } detail: {
             detailView
         }
-        .onChange(of: selectedSideBarItem) { _, newValue in
+        .onChange(of: selectedFolderURL) { _, newValue in
             viewModel.selectedFileIds = []
             isMoveUpTargeted = false
-            if let newSection = newValue {
-                viewModel.currentDir = newSection.url
+            if let newURL = newValue, viewModel.currentDir.standardizedFileURL != newURL.standardizedFileURL {
+                viewModel.currentDir = newURL
                 viewModel.loadCurrentDirectory()
+            }
+        }
+        .onChange(of: viewModel.currentDir) { _, newValue in
+            let standardized = newValue.standardizedFileURL
+            if selectedFolderURL?.standardizedFileURL != standardized {
+                selectedFolderURL = standardized
             }
         }
         .onAppear() {
@@ -178,13 +184,7 @@ struct ContentView: View {
     }
 
     private var sidebarView: some View {
-        List(SideBarItem.allCases, selection: $selectedSideBarItem) { item in
-            NavigationLink(value: item) {
-                Label(item.rawValue, systemImage: item.iconName)
-            }
-        }
-        .listStyle(SidebarListStyle())
-        .navigationTitle("")
+        SidebarView(viewModel: viewModel, selectedFolderURL: $selectedFolderURL)
     }
 
     @ViewBuilder
@@ -467,6 +467,56 @@ struct ContentView: View {
             }
             .padding()
         }
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                if viewModel.isGitRepo, let branch = viewModel.gitBranch {
+                    HStack(spacing: 4) {
+                        Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                            .imageScale(.small)
+                        
+                        Menu {
+                            ForEach(viewModel.gitBranches, id: \.self) { branchName in
+                                Button(action: {
+                                    viewModel.checkoutBranch(name: branchName)
+                                }) {
+                                    HStack {
+                                        Text(branchName)
+                                        if branchName == branch {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Text(branch)
+                                .fontWeight(.semibold)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        .disabled(viewModel.gitUncommittedCount > 0)
+                        .help(viewModel.gitUncommittedCount > 0 ? "Cannot switch branches with uncommitted changes" : "Switch Git Branch")
+                        
+                        if viewModel.gitUncommittedCount > 0 {
+                            Text("(\(viewModel.gitUncommittedCount) uncommitted)")
+                                .foregroundStyle(.orange)
+                        } else {
+                            Text("(all committed)")
+                                .foregroundStyle(.green)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 12)
+                }
+                Spacer()
+                Text("\(viewModel.itemCountText)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+            }
+            .padding(.vertical, 6)
+            .background(.bar)
+        }
         .coordinateSpace(name: "fileGridArea")
         .onPreferenceChange(FileFramePreferenceKey.self) { frames in
             fileFrames = frames
@@ -524,21 +574,6 @@ struct ContentView: View {
 //        }
         .contextMenu {
             GridContextMenu(viewModel: viewModel)
-        }
-        .onChange(of: selectedSideBarItem) { _, newValue in
-            if let newSection = newValue {
-                if viewModel.currentDir.standardizedFileURL != newSection.url.standardizedFileURL {
-                    viewModel.selectedFileIds = []
-                    viewModel.currentDir = newSection.url
-                    viewModel.loadCurrentDirectory()
-                }
-            }
-        }
-        .onChange(of: viewModel.currentDir) { _, newValue in
-            let matchingItem = viewModel.matchingSidebarItem
-            if selectedSideBarItem != matchingItem {
-                selectedSideBarItem = matchingItem
-            }
         }
     }
 }
