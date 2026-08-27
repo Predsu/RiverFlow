@@ -843,8 +843,8 @@ import SwiftUI
     func contextMenusBuildFilePackageAndGridVariants() throws {
         let viewModel = FolderViewModel(startDir: URL(fileURLWithPath: "/tmp"))
         let action = {}
-        let regularMenu = FileContextMenu(file: makeFile(), viewModel: viewModel, isSelected: false, onOpenAsDirectory: action, onCopy: action, onCut: action, onMoveToTrash: action)
-        let packageMenu = FileContextMenu(file: makeFile(name: "Editor.app"), viewModel: viewModel, isSelected: true, onOpenAsDirectory: action, onCopy: action, onCut: action, onMoveToTrash: action)
+        let regularMenu = FileContextMenu(file: makeFile(), viewModel: viewModel, isSelected: false, onOpenAsDirectory: action, onCopy: action, onCut: action, onMoveToTrash: action, onDiscard: action)
+        let packageMenu = FileContextMenu(file: makeFile(name: "Editor.app"), viewModel: viewModel, isSelected: true, onOpenAsDirectory: action, onCopy: action, onCut: action, onMoveToTrash: action, onDiscard: action)
         let gridMenu = GridContextMenu(viewModel: viewModel)
 
         #expect(!bodyTypeName(of: regularMenu).isEmpty)
