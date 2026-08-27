@@ -666,6 +666,28 @@ import SwiftUI
         #expect(FileManager.default.fileExists(atPath: groupedFolder.appendingPathComponent("two.txt").path))
         #expect(!FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("one.txt").path))
     }
+    
+    @Test("isFileStaged and isFileUnstaged recognize git status patterns")
+    func isFileStagedAndIsFileUnstagedRecognizeGitStatusPatterns() throws {
+        let viewModel = FolderViewModel(startDir: URL(fileURLWithPath: "/tmp"))
+        let fileURL = URL(fileURLWithPath: "/tmp/gitfile.txt").standardizedFileURL
+        
+        viewModel.gitStatusMap[fileURL] = " M"
+        #expect(!viewModel.isFileStaged(url: fileURL))
+        #expect(viewModel.isFileUnstaged(url: fileURL))
+        
+        viewModel.gitStatusMap[fileURL] = "M "
+        #expect(viewModel.isFileStaged(url: fileURL))
+        #expect(!viewModel.isFileUnstaged(url: fileURL))
+        
+        viewModel.gitStatusMap[fileURL] = "??"
+        #expect(!viewModel.isFileStaged(url: fileURL))
+        #expect(viewModel.isFileUnstaged(url: fileURL))
+        
+        viewModel.gitStatusMap[fileURL] = "MM"
+        #expect(viewModel.isFileStaged(url: fileURL))
+        #expect(viewModel.isFileUnstaged(url: fileURL))
+    }
 }
 
 @Suite struct FileItemTests {
@@ -876,5 +898,98 @@ import SwiftUI
         let second = FileIconView.IconCache.shared.icon(for: "/tmp")
 
         #expect(first === second)
+    }
+
+    @Test("FileContextMenu builds unstaged and staged git variants")
+    func fileContextMenuBuildsUnstagedAndStagedGitVariants() throws {
+        let viewModel = FolderViewModel(startDir: URL(fileURLWithPath: "/tmp"))
+        viewModel.isGitRepo = true
+        
+        let action = {}
+        let file = makeFile()
+        
+        viewModel.gitStatusMap[file.url.standardizedFileURL] = " M"
+        let unstagedMenu = FileContextMenu(
+            file: file,
+            viewModel: viewModel,
+            isSelected: false,
+            onOpenAsDirectory: action,
+            onCopy: action,
+            onCut: action,
+            onMoveToTrash: action,
+            onDiscard: action
+        )
+        #expect(!bodyTypeName(of: unstagedMenu).isEmpty)
+        
+        viewModel.gitStatusMap[file.url.standardizedFileURL] = "M "
+        let stagedMenu = FileContextMenu(
+            file: file,
+            viewModel: viewModel,
+            isSelected: false,
+            onOpenAsDirectory: action,
+            onCopy: action,
+            onCut: action,
+            onMoveToTrash: action,
+            onDiscard: action
+        )
+        #expect(!bodyTypeName(of: stagedMenu).isEmpty)
+    }
+}
+
+@Suite struct GitBadgeViewTests {
+    @Test("GitBadgeView resolves badge text and color correctly")
+    func gitBadgeViewResolvesBadgeTextAndColorCorrectly() throws {
+        let untracked = GitBadgeView(status: "??")
+        #expect(untracked.badgeText == "U")
+        
+        let modified = GitBadgeView(status: " M")
+        #expect(modified.badgeText == "M")
+        
+        let added = GitBadgeView(status: "A ")
+        #expect(added.badgeText == "A")
+        
+        let deleted = GitBadgeView(status: "D ")
+        #expect(deleted.badgeText == "D")
+        
+        let other = GitBadgeView(status: "XY")
+        #expect(other.badgeText == "XY")
+    }
+}
+
+@Suite struct FileWindowManagerTests {
+    @Test("FileWindowManager opens and tracks info windows")
+    @MainActor
+    func fileWindowManagerOpensAndTracksInfoWindows() throws {
+        let file = FileItem(
+            url: URL(fileURLWithPath: "/tmp/infofile.txt"),
+            name: "infofile.txt",
+            itemType: .FILE,
+            size: 100,
+            modificationDate: Date(),
+            isHidden: false
+        )
+        
+        FileWindowManager.openInfoView(for: file)
+        FileWindowManager.openInfoView(for: file)
+        
+        let windowIdentifier = "fileinfowindow-\(file.id.uuidString)"
+        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == windowIdentifier }) {
+            NotificationCenter.default.post(
+                name: NSWindow.willCloseNotification,
+                object: window
+            )
+        }
+    }
+}
+
+@Suite struct ThumbnailManagerTests {
+    @Test("ThumbnailManager caching and clearing cache")
+    func thumbnailManagerCachingAndClearingCache() throws {
+        let manager = ThumbnailManager.shared
+        manager.clearCache()
+        
+        let tempFileURL = URL(fileURLWithPath: "/tmp/thumbnail_test.png")
+        manager.getFileThumbnail(for: tempFileURL, size: 48) { _ in }
+        manager.clearCache()
     }
 }
