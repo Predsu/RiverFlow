@@ -417,6 +417,27 @@ class FolderViewModel {
         loadCurrentDirectory()
     }
     
+    /// Opens the currently selected files, or enters directory if a single folder is selected. If multiple directories are selected, temporarily opens them in Finder.
+    func openSelectedFiles() {
+        let targets = selectedFiles
+        guard !targets.isEmpty else { return }
+        
+        if targets.count == 1, let singleItem = targets.first {
+            if singleItem.url.pathExtension == "app" {
+                NSWorkspace.shared.open(singleItem.url)
+            } else if singleItem.itemType == .DIRECTORY {
+                enterDirectory(dir: singleItem)
+                selectedFileIds.removeAll()
+            } else {
+                NSWorkspace.shared.open(singleItem.url)
+            }
+        } else {
+            for file in targets {
+                NSWorkspace.shared.open(file.url)
+            }
+        }
+    }
+    
     /// Navigates one level up in directories tree.
     func goToParentDirectory() {
         let parentDir = currentDir.deletingLastPathComponent()
@@ -585,6 +606,37 @@ class FolderViewModel {
         guard !restorePairs.isEmpty else { return }
         registerTrashUndo(restorePairs: restorePairs)
     }
+    
+    /// Moves currently selected files to system trash.
+    func moveSelectedToTrash() {
+        let targets = selectedFiles
+        guard !targets.isEmpty else { return }
+        moveToTrash(files: targets)
+        selectedFileIds.removeAll()
+    }
+    
+    /// Permanently deletes the specified files from the filesystem without moving them to trash.
+    func permanentlyDelete(files: [FileItem]) {
+        guard !files.isEmpty else { return }
+        for file in files {
+            do {
+                try FileManager.default.removeItem(at: file.url)
+            } catch {
+                print("Error permanently deleting \(file.name): \(error.localizedDescription)")
+            }
+        }
+        loadCurrentDirectory()
+        SoundEffects.playSoundEffect(name: "trash")
+    }
+
+    /// Permanently deletes currently selected files from the filesystem.
+    func permanentlyDeleteSelected() {
+        let targets = selectedFiles
+        guard !targets.isEmpty else { return }
+        permanentlyDelete(files: targets)
+        selectedFileIds.removeAll()
+    }
+
     
     /// Registers undo step to restore items back from the trash to their original locations.
     /// - Parameter restorePairs: List of tuples linking the trashed URL with its original path URL.
