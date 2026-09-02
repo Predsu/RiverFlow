@@ -10,8 +10,11 @@ import SwiftUI
 @main
 struct RiverFlowApp: App {
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "mainWindow") {
             ContentView()
+        }
+        .commands {
+            RiverFlowCommands()
         }
     }
 }
