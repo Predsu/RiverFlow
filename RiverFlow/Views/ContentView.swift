@@ -80,6 +80,7 @@ struct GridContextMenu: View {
 
 struct ContentView: View {
     @Environment(\.undoManager) private var undoManager
+    @Environment(\.openWindow) private var openWindow
     @State private var viewModel = FolderViewModel()
     @State private var selectedFolderURL: URL? = SideBarItem.home.url.standardizedFileURL
     @State private var selectedFileViewStyle: FileViewStyle = .grid
@@ -181,6 +182,10 @@ struct ContentView: View {
         } action: { newWidth in
             windowWidth = newWidth
         }
+        .focusedValue(\.activeFolderViewModel, viewModel)
+        .handleKeyboardShortcuts(viewModel: viewModel, openWindow: {
+            openWindow(id: "mainWindow")
+        })
     }
 
     private var sidebarView: some View {
