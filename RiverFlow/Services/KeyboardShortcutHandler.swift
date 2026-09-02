@@ -31,7 +31,7 @@ final class KeyboardShortcutHandler {
         }
         if isEditing {
             switch action {
-            case .delete, .openSelected:
+            case .delete, .permanentlyDelete, .openSelected:
                 return false
             default:
                 break
