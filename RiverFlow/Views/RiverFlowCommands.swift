@@ -3,11 +3,12 @@ import SwiftUI
 /// App commands defining native macOS menu items and standard keyboard shortcuts.
 struct RiverFlowCommands: Commands {
     @FocusedValue(\.activeFolderViewModel) private var activeViewModel: FolderViewModel?
+    @Environment(\.openWindow) private var openWindow
     
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Window") {
-                NSApp.sendAction(#selector(NSDocumentController.newDocument(_:)), to: nil, from: nil)
+                openWindow(id: "mainWindow")
             }
             .keyboardShortcut("t", modifiers: .command)
             
