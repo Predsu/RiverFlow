@@ -49,7 +49,7 @@ enum SideBarItem: String, CaseIterable, Identifiable {
     /// SF Symbols name for the icon representing this sidebar location.
     var iconName: String {
         switch self {
-        case .mac: return "apple.logo"
+        case .mac: return "desktopcomputer"
         case .home: return "house"
         case .desktop: return "menubar.dock.rectangle"
         case .documents: return "doc.text"

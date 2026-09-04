@@ -156,6 +156,23 @@ struct ContentView: View {
         .overlay {
             SplashOverlay(isPresented: $showSplash)
         }
+        .overlay {
+            if viewModel.isJumpToPathPresented {
+                ZStack {
+                    Color.black.opacity(0.8)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            viewModel.isJumpToPathPresented = false
+                        }
+                    
+                    JumpToPathModalView(viewModel: viewModel, isPresented: $viewModel.isJumpToPathPresented)
+                        .padding(.top, 40)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                .animation(.spring(response: 0.25, dampingFraction: 0.8), value: viewModel.isJumpToPathPresented)
+            }
+        }
         .toolbar(showSplash ? .hidden : .automatic)
         .dropDestination(for: URL.self) { urls, location in
             viewModel.handleDrop(urls: urls)

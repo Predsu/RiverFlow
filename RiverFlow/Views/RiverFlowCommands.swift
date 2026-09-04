@@ -65,6 +65,14 @@ struct RiverFlowCommands: Commands {
             }
             .keyboardShortcut(.upArrow, modifiers: .command)
             .disabled(activeViewModel == nil || activeViewModel?.currentDir.path == "/")
+            
+            Divider()
+            
+            Button("Go to Folder") {
+                activeViewModel?.isJumpToPathPresented = true
+            }
+            .keyboardShortcut("G", modifiers: [.command])
+            .disabled(activeViewModel == nil)
         }
     }
 }

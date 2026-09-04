@@ -97,6 +97,9 @@ final class KeyboardShortcutHandler {
                 NSApp.sendAction(#selector(NSDocumentController.newDocument(_:)), to: nil, from: nil)
             }
             return true
+        case .jumpToPath:
+            viewModel.isJumpToPathPresented = true
+            return true
         }
     }
 }
