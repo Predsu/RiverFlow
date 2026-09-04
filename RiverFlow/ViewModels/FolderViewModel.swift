@@ -54,6 +54,8 @@ class FolderViewModel {
     var globalSearchResults: [FileItem] = []
     private var metadataQuery: NSMetadataQuery?
     
+    var isJumpToPathPresented: Bool = false
+    
     weak var undoManager: UndoManager?
     
     var fileCollision: FileCollision?
@@ -129,7 +131,7 @@ class FolderViewModel {
     ///     - homeDir: Absolute path string of user's home directory as `String`.
     /// - Returns: Integer representing tier ranking (0 highest, 4 lowest) as `Int`.
     /// - Note: This does not guarantee perfect search results or no "junk files" in them.
-    private static func relevanceTier(for url: URL, homeDir: String) -> Int {
+    static func relevanceTier(for url: URL, homeDir: String) -> Int {
         let path = url.path
         guard path.hasPrefix(homeDir) else { return 4 }
         
@@ -454,6 +456,44 @@ class FolderViewModel {
         historyForward.append(currentDir)
         currentDir = previous
         loadCurrentDirectory()
+    }
+    
+    /// Navigates directly to a target directory URL, updating history.
+    func navigateTo(url: URL) {
+        let standardized = url.standardizedFileURL
+        guard standardized != currentDir.standardizedFileURL else { return }
+        historyBackward.append(currentDir)
+        historyForward.removeAll()
+        currentDir = standardized
+        selectedFileIds.removeAll()
+        loadCurrentDirectory()
+    }
+    
+    /// Resolves and jumps to a path string (expanding ~ and resolving relative paths).
+    /// - Returns: `true` if navigation was successful, `false` otherwise.
+    @discardableResult
+    func jumpTo(path: String) -> Bool {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        
+        let expanded: String
+        if trimmed == "~" {
+            expanded = NSHomeDirectory()
+        } else if trimmed.hasPrefix("~/") {
+            expanded = (NSHomeDirectory() as NSString).appendingPathComponent(String(trimmed.dropFirst(2)))
+        } else if trimmed.hasPrefix("/") {
+            expanded = trimmed
+        } else {
+            expanded = (currentDir.path as NSString).appendingPathComponent(trimmed)
+        }
+        
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir), isDir.boolValue {
+            let targetURL = URL(fileURLWithPath: expanded).standardizedFileURL
+            navigateTo(url: targetURL)
+            return true
+        }
+        return false
     }
     
     func goForward() {
