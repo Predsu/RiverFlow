@@ -133,7 +133,7 @@ class FolderViewModel {
     /// - Note: This does not guarantee perfect search results or no "junk files" in them.
     static func relevanceTier(for url: URL, homeDir: String) -> Int {
         let path = url.path
-        guard path.hasPrefix(homeDir) else { return 4 }
+        guard path == homeDir || path.hasPrefix(homeDir + "/") else { return 4 }
         
         let lowerComponents = url.pathComponents.map { $0.lowercased() }
         if lowerComponents.contains(where: { systemNoiseComponents.contains($0) }) {
