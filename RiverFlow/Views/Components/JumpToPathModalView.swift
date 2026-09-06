@@ -10,6 +10,7 @@ struct JumpToPathModalView: View {
     @State private var suggestions: [PathSuggestion] = []
     @State private var selectedSuggestionIndex: Int = 0
     @State private var errorMessage: String? = nil
+    @State private var suggestionTask: Task<Void, Never>? = nil
     @FocusState private var isFieldFocused: Bool
     
     private let autocompleteService = PathAutocompleteService.shared
@@ -140,6 +141,9 @@ struct JumpToPathModalView: View {
             isFieldFocused = true
             updateSuggestions(for: pathInput)
         }
+        .onDisappear {
+            suggestionTask?.cancel()
+        }
         .onKeyPress(.downArrow) {
             if !suggestions.isEmpty {
                 selectedSuggestionIndex = (selectedSuggestionIndex + 1) % suggestions.count
@@ -224,12 +228,23 @@ struct JumpToPathModalView: View {
     
     private func updateSuggestions(for query: String) {
         errorMessage = nil
-        let newSuggestions = autocompleteService.autocompletionSuggestions(
-            for: query,
-            currentDir: viewModel.currentDir
-        )
-        self.suggestions = newSuggestions
-        self.selectedSuggestionIndex = 0
+        suggestionTask?.cancel()
+        
+        let currentDir = viewModel.currentDir
+        let autocompleteService = self.autocompleteService
+        
+        suggestionTask = Task {
+            let newSuggestions = await Task.detached(priority: .userInitiated) {
+                autocompleteService.autocompletionSuggestions(
+                    for: query,
+                    currentDir: currentDir
+                )
+            }.value
+            
+            guard !Task.isCancelled else { return }
+            self.suggestions = newSuggestions
+            self.selectedSuggestionIndex = 0
+        }
     }
     
     private func selectSuggestion(_ suggestion: PathSuggestion) {
