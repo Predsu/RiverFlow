@@ -21,6 +21,7 @@ enum KeyboardShortcutAction: String, CaseIterable, Identifiable, Sendable {
     case goBack
     case goForward
     case newWindow
+    case jumpToPath
     
     var id: String { rawValue }
     
@@ -35,6 +36,7 @@ enum KeyboardShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .goBack: return "Back"
         case .goForward: return "Forward"
         case .newWindow: return "New Window"
+        case .jumpToPath: return "Go to Folder"
         }
     }
     
@@ -49,6 +51,7 @@ enum KeyboardShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .goBack: return "chevron.left"
         case .goForward: return "chevron.right"
         case .newWindow: return "macwindow.badge.plus"
+        case .jumpToPath: return "arrow.right.circle"
         }
     }
     
@@ -56,7 +59,7 @@ enum KeyboardShortcutAction: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .newFolder, .newFile, .delete, .permanentlyDelete, .openSelected:
             return .fileOperations
-        case .navigateUp, .goBack, .goForward:
+        case .navigateUp, .goBack, .goForward, .jumpToPath:
             return .navigation
         case .newWindow:
             return .window
@@ -83,6 +86,8 @@ enum KeyboardShortcutAction: String, CaseIterable, Identifiable, Sendable {
             return KeyCombo(key: "]", character: "]", modifiers: [.command], keyCode: 30)
         case .newWindow:
             return KeyCombo(key: "t", character: "t", modifiers: [.command], keyCode: 17)
+        case .jumpToPath:
+            return KeyCombo(key: "G", character: "g", modifiers: [.command], keyCode: 5)
         }
     }
     
@@ -97,6 +102,7 @@ enum KeyboardShortcutAction: String, CaseIterable, Identifiable, Sendable {
         case .goBack: return "⌘["
         case .goForward: return "⌘]"
         case .newWindow: return "⌘T"
+        case .jumpToPath: return "⌘G"
         }
     }
     
