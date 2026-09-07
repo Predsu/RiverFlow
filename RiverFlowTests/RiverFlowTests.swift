@@ -1350,5 +1350,118 @@ import SwiftUI
         #expect(!suggestionPaths.contains(libraryFolder.standardizedFileURL.path))
         #expect(!suggestionPaths.contains(outsideDir.standardizedFileURL.path))
     }
+
+    @Test("PathSuggestion correctly formats relative display paths")
+    func pathSuggestionCorrectlyFormatsRelativeDisplayPaths() {
+        let home = "/Users/testuser"
+        let homeURL = URL(fileURLWithPath: home)
+        
+        let homeSuggestion = PathSuggestion(url: homeURL, homeDir: home, revelanceTier: 0)
+        #expect(homeSuggestion.relativeDisplayPath == "~")
+        #expect(homeSuggestion.displayName == "testuser")
+        
+        let docURL = URL(fileURLWithPath: "/Users/testuser/Documents")
+        let docSuggestion = PathSuggestion(url: docURL, homeDir: home, revelanceTier: 0)
+        #expect(docSuggestion.relativeDisplayPath == "~/Documents")
+        #expect(docSuggestion.displayName == "Documents")
+        
+        let rootURL = URL(fileURLWithPath: "/")
+        let rootSuggestion = PathSuggestion(url: rootURL, homeDir: home, revelanceTier: 0)
+        #expect(rootSuggestion.relativeDisplayPath == "/")
+        #expect(rootSuggestion.displayName == "/")
+        
+        let outURL = URL(fileURLWithPath: "/Library")
+        let outSuggestion = PathSuggestion(url: outURL, homeDir: home, revelanceTier: 0)
+        #expect(outSuggestion.relativeDisplayPath == "/Library")
+        #expect(outSuggestion.displayName == "Library")
+    }
+
+    @Test("PathAutocompleteService expandPath returns empty for whitespace")
+    func pathAutocompleteServiceExpandPathReturnsEmptyForWhitespace() {
+        let home = "/Users/testuser"
+        #expect(PathAutocompleteService.expandPath("   ", homeDir: home) == "")
+        #expect(PathAutocompleteService.expandPath("", homeDir: home) == "")
+    }
+
+    @Test("PathAutocompleteService autocompletionSuggestions query matching")
+    func pathAutocompleteServiceAutocompletionSuggestionsQueryMatching() throws {
+        let mockHome = try Self.createTempDir()
+        defer { Self.deleteTempDir(at: mockHome) }
+        
+        let homePath = mockHome.path
+        
+        let alpha = mockHome.appendingPathComponent("Alpha")
+        let beta = mockHome.appendingPathComponent("Beta")
+        let alpha2 = mockHome.appendingPathComponent("Alpaca")
+        
+        try FileManager.default.createDirectory(at: alpha, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: beta, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: alpha2, withIntermediateDirectories: true)
+        
+        let service = PathAutocompleteService()
+        
+        let suggestions1 = service.autocompletionSuggestions(for: "Alpha", currentDir: mockHome, homeDir: homePath)
+        let names1 = suggestions1.map(\.displayName)
+        #expect(names1.contains("Alpha"))
+        #expect(!names1.contains("Beta"))
+        #expect(!names1.contains("Alpaca"))
+        
+        let suggestions2 = service.autocompletionSuggestions(for: "alp", currentDir: mockHome, homeDir: homePath)
+        let names2 = suggestions2.map(\.displayName)
+        #expect(names2.contains("Alpha"))
+        #expect(names2.contains("Alpaca"))
+        #expect(!names2.contains("Beta"))
+    }
+    
+    @Test("PathAutocompleteService autocompletionSuggestions respects maxResults")
+    func pathAutocompleteServiceAutocompletionSuggestionsRespectsMaxResults() throws {
+        let mockHome = try Self.createTempDir()
+        defer { Self.deleteTempDir(at: mockHome) }
+        
+        for i in 1...10 {
+            let dir = mockHome.appendingPathComponent("dir\(i)")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        
+        let service = PathAutocompleteService()
+        let suggestions = service.autocompletionSuggestions(for: "dir", currentDir: mockHome, homeDir: mockHome.path, maxResults: 5)
+        
+        #expect(suggestions.count == 5)
+    }
+
+    @Test("PathAutocompleteService autocompletionSuggestions handles nested paths")
+    func pathAutocompleteServiceAutocompletionSuggestionsHandlesNestedPaths() throws {
+        let mockHome = try Self.createTempDir()
+        defer { Self.deleteTempDir(at: mockHome) }
+        
+        let parent = mockHome.appendingPathComponent("parentDir")
+        let child1 = parent.appendingPathComponent("childOne")
+        let child2 = parent.appendingPathComponent("childTwo")
+        
+        try FileManager.default.createDirectory(at: child1, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: child2, withIntermediateDirectories: true)
+        
+        let service = PathAutocompleteService()
+        let suggestions = service.autocompletionSuggestions(for: parent.path + "/child", currentDir: mockHome, homeDir: mockHome.path)
+        
+        let names = suggestions.map(\.displayName)
+        #expect(names.contains("childOne"))
+        #expect(names.contains("childTwo"))
+    }
+
+    @Test("PathAutocompleteService autocompletionSuggestions empty query fallback")
+    func pathAutocompleteServiceAutocompletionSuggestionsEmptyQueryFallback() throws {
+        let mockHome = try Self.createTempDir()
+        defer { Self.deleteTempDir(at: mockHome) }
+        
+        let dir1 = mockHome.appendingPathComponent("customDir")
+        try FileManager.default.createDirectory(at: dir1, withIntermediateDirectories: true)
+        
+        let service = PathAutocompleteService()
+        let suggestions = service.autocompletionSuggestions(for: "", currentDir: mockHome, homeDir: mockHome.path)
+        
+        let names = suggestions.map(\.displayName)
+        #expect(names.contains("customDir"))
+    }
 }
 
