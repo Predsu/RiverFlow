@@ -55,6 +55,7 @@ class FolderViewModel {
     private var metadataQuery: NSMetadataQuery?
     
     var isJumpToPathPresented: Bool = false
+    var isGitCommitPresented: Bool = false
     
     weak var undoManager: UndoManager?
     
@@ -1033,7 +1034,8 @@ class FolderViewModel {
         }
     }
     
-    private func runGitCommand(args: [String], in directory: URL? = nil) -> String? {
+    /// Executes a git command and returns output, error, and exit status.
+    func runGitCommandDetailed(args: [String], in directory: URL? = nil) -> (output: String, error: String, exitCode: Int32) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
         process.arguments = ["git"] + args
@@ -1047,20 +1049,21 @@ class FolderViewModel {
         do {
             try process.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            _ = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
-
-            guard process.terminationStatus == 0 else {
-                return nil
-            }
             
-            if let output = String(data: data, encoding: .utf8) {
-                return output.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
+            let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let error = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return (output: output, error: error, exitCode: process.terminationStatus)
         } catch {
-            return nil
+            return (output: "", error: error.localizedDescription, exitCode: -1)
         }
-        return nil
+    }
+    
+    func runGitCommand(args: [String], in directory: URL? = nil) -> String? {
+        let result = runGitCommandDetailed(args: args, in: directory)
+        guard result.exitCode == 0 else { return nil }
+        return result.output
     }
     
     func updateGitStatus() {
@@ -1293,6 +1296,174 @@ class FolderViewModel {
             DispatchQueue.main.async {
                 self.loadCurrentDirectory()
             }
+        }
+    }
+    
+    /// Retrieves the last commit message from the repository for amending.
+    func getLastCommitMessage(in directory: URL? = nil) -> String? {
+        return runGitCommand(args: ["log", "-1", "--pretty=%B"], in: directory)
+    }
+    
+    /// Obtains a summary of staged and unstaged files in the repository.
+    func getGitStatusSummary(in directory: URL? = nil) -> GitStatusSummary {
+        let dir = directory ?? currentDir
+        guard let gitRootPath = runGitCommand(args: ["rev-parse", "--show-toplevel"], in: dir) else {
+            return GitStatusSummary()
+        }
+        
+        let gitRootURL = URL(fileURLWithPath: gitRootPath).standardizedFileURL
+        guard let statusOutput = runGitCommand(args: ["status", "--porcelain"], in: dir) else {
+            return GitStatusSummary()
+        }
+        
+        var staged: [URL] = []
+        var unstaged: [URL] = []
+        var stagedCount = 0
+        var unstagedCount = 0
+        var untrackedCount = 0
+        
+        let lines = statusOutput.components(separatedBy: .newlines)
+        for line in lines {
+            guard line.count >= 4 else { continue }
+            let startIndex = line.startIndex
+            let x = line[startIndex]
+            let y = line[line.index(after: startIndex)]
+            
+            let pathPart = String(line[line.index(startIndex, offsetBy: 3)...])
+            let relativePath: String
+            if pathPart.contains(" -> ") {
+                relativePath = pathPart.components(separatedBy: " -> ").last?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? pathPart
+            } else {
+                relativePath = pathPart.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let fileURL = gitRootURL.appendingPathComponent(relativePath).standardizedFileURL
+            
+            if x != " " && x != "?" {
+                stagedCount += 1
+                staged.append(fileURL)
+            }
+            if y != " " && !(x == "?" && y == "?") {
+                unstagedCount += 1
+                unstaged.append(fileURL)
+            }
+            if x == "?" && y == "?" {
+                untrackedCount += 1
+                unstaged.append(fileURL)
+            }
+        }
+        
+        return GitStatusSummary(
+            stagedCount: stagedCount,
+            unstagedCount: unstagedCount,
+            untrackedCount: untrackedCount,
+            stagedFiles: staged,
+            unstagedFiles: unstaged
+        )
+    }
+    
+    /// Performs a git commit with the given message and options.
+    func performGitCommit(
+        message: String,
+        options: GitCommitOptions,
+        in directory: URL? = nil,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        let targetDir = directory ?? currentDir
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            guard self.runGitCommand(args: ["rev-parse", "--show-toplevel"], in: targetDir) != nil else {
+                DispatchQueue.main.async {
+                    completion(.failure(GitError.commandFailed("Not a git repository.")))
+                }
+                return
+            }
+            
+            let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !options.isAmend && trimmedMessage.isEmpty {
+                DispatchQueue.main.async {
+                    completion(.failure(GitError.emptyMessage))
+                }
+                return
+            }
+            
+            if options.stageAll {
+                let addResult = self.runGitCommandDetailed(args: ["add", "-A"], in: targetDir)
+                if addResult.exitCode != 0 {
+                    DispatchQueue.main.async {
+                        completion(.failure(GitError.commandFailed(addResult.error.isEmpty ? addResult.output : addResult.error)))
+                    }
+                    return
+                }
+            }
+            
+            let commitArgs = options.buildCommitArguments(message: trimmedMessage)
+            let commitResult = self.runGitCommandDetailed(args: commitArgs, in: targetDir)
+            
+            if commitResult.exitCode != 0 {
+                let errorOutput = commitResult.error.isEmpty ? commitResult.output : commitResult.error
+                DispatchQueue.main.async {
+                    completion(.failure(GitError.commandFailed(errorOutput.isEmpty ? "Commit failed." : errorOutput)))
+                }
+                return
+            }
+            
+            if options.action == .commitAndPush {
+                let pushResult = self.runGitCommandDetailed(args: ["push"], in: targetDir)
+                if pushResult.exitCode != 0 {
+                    let errorOutput = pushResult.error.isEmpty ? pushResult.output : pushResult.error
+                    DispatchQueue.main.async {
+                        completion(.failure(GitError.commandFailed("Commit succeeded, but push failed:\n\(errorOutput)")))
+                    }
+                    return
+                }
+            } else if options.action == .commitAndSync {
+                let pullResult = self.runGitCommandDetailed(args: ["pull", "--rebase"], in: targetDir)
+                if pullResult.exitCode != 0 {
+                    let errorOutput = pullResult.error.isEmpty ? pullResult.output : pullResult.error
+                    DispatchQueue.main.async {
+                        completion(.failure(GitError.commandFailed("Commit succeeded, but pull failed:\n\(errorOutput)")))
+                    }
+                    return
+                }
+                
+                let pushResult = self.runGitCommandDetailed(args: ["push"], in: targetDir)
+                if pushResult.exitCode != 0 {
+                    let errorOutput = pushResult.error.isEmpty ? pushResult.output : pushResult.error
+                    DispatchQueue.main.async {
+                        completion(.failure(GitError.commandFailed("Commit & sync succeeded in pull, but push failed:\n\(errorOutput)")))
+                    }
+                    return
+                }
+            }
+            
+            SoundEffects.playSoundEffect(name: "confirmation")
+            self.updateGitStatus()
+            
+            DispatchQueue.main.async {
+                self.loadCurrentDirectory()
+                completion(.success(commitResult.output))
+            }
+        }
+    }
+}
+
+/// Errors occurring during Git operations.
+public enum GitError: LocalizedError, Equatable {
+    case commandFailed(String)
+    case emptyMessage
+    case noChangesToCommit
+    
+    public var errorDescription: String? {
+        switch self {
+        case .commandFailed(let msg):
+            return msg.isEmpty ? "Git command failed." : msg
+        case .emptyMessage:
+            return "Commit message cannot be empty."
+        case .noChangesToCommit:
+            return "No changes to commit. Stage your changes or enable 'Stage all changes'."
         }
     }
 }

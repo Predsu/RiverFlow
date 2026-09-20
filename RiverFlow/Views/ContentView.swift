@@ -75,6 +75,17 @@ struct GridContextMenu: View {
             Text("Copy Shell-Formatted Dir Path")
             Image(systemName: "doc.on.doc")
         }
+        
+        if viewModel.isGitRepo {
+            Divider()
+            
+            Button(action: {
+                viewModel.isGitCommitPresented = true
+            }) {
+                Text("Git Commit")
+                Image(systemName: "checkmark.circle")
+            }
+        }
     }
 }
 
@@ -171,6 +182,23 @@ struct ContentView: View {
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 .animation(.spring(response: 0.25, dampingFraction: 0.8), value: viewModel.isJumpToPathPresented)
+            }
+        }
+        .overlay {
+            if viewModel.isGitCommitPresented {
+                ZStack {
+                    Color.black.opacity(0.8)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            viewModel.isGitCommitPresented = false
+                        }
+                    
+                    GitCommitModalView(viewModel: viewModel, isPresented: $viewModel.isGitCommitPresented)
+                        .padding(.top, 40)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                .animation(.spring(response: 0.25, dampingFraction: 0.8), value: viewModel.isGitCommitPresented)
             }
         }
         .toolbar(showSplash ? .hidden : .automatic)
@@ -415,6 +443,9 @@ struct ContentView: View {
                         }
                     }
             }
+        }
+        .contextMenu {
+            FolderContextMenu(viewModel: viewModel)
         }
     }
 
