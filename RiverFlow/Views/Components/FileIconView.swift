@@ -47,7 +47,7 @@ struct FileIconView: View {
     private var specialFolderIconName: String? {
         guard file.itemType == .DIRECTORY else { return nil }
         let path = file.url.path
-        let homePath = NSHomeDirectory()
+        let homePath = PathAutocompleteService.userHomeDirectory
         
         switch path {
         case homePath: return "house"

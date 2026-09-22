@@ -34,7 +34,7 @@ enum SideBarItem: String, CaseIterable, Identifiable {
         case .mac:
             return URL(fileURLWithPath: "/")
         case .home:
-            return URL(fileURLWithPath: NSHomeDirectory())
+            return URL(fileURLWithPath: PathAutocompleteService.userHomeDirectory)
         case .desktop:
             return FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
         case .documents:

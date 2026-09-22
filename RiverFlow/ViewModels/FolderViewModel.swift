@@ -99,7 +99,7 @@ class FolderViewModel {
         files.filter { selectedFileIds.contains($0.id) }
     }
     
-    init(startDir: URL = URL(fileURLWithPath: NSHomeDirectory())) {
+    init(startDir: URL = URL(fileURLWithPath: PathAutocompleteService.userHomeDirectory)) {
         self.currentDir = startDir
         self.sidebarRoots = SideBarItem.allCases.map { item in
             SidebarNode(name: item.rawValue, url: item.url, iconName: item.iconName, isRoot: true)
@@ -179,7 +179,7 @@ class FolderViewModel {
             return true
         }
         
-        let homeDir = NSHomeDirectory()
+        let homeDir = PathAutocompleteService.userHomeDirectory
         
         return filtered.sorted { (a, b) -> Bool in
             if isSearching {
@@ -477,16 +477,7 @@ class FolderViewModel {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
         
-        let expanded: String
-        if trimmed == "~" {
-            expanded = NSHomeDirectory()
-        } else if trimmed.hasPrefix("~/") {
-            expanded = (NSHomeDirectory() as NSString).appendingPathComponent(String(trimmed.dropFirst(2)))
-        } else if trimmed.hasPrefix("/") {
-            expanded = trimmed
-        } else {
-            expanded = (currentDir.path as NSString).appendingPathComponent(trimmed)
-        }
+        let expanded = PathAutocompleteService.expandPath(trimmed, currentDir: currentDir)
         
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir), isDir.boolValue {
@@ -833,7 +824,7 @@ class FolderViewModel {
     }
     
     private func transferDroppedItem(from sourceURL: URL, to destinationURL: URL) throws {
-        if sourceURL.path.hasPrefix(NSHomeDirectory()) {
+        if sourceURL.path.hasPrefix(PathAutocompleteService.userHomeDirectory) {
             try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
         } else {
             try FileManager.default.copyItem(at: sourceURL, to: destinationURL)

@@ -400,6 +400,11 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = RiverFlow;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSDesktopFolderUsageDescription = "RiverFlow needs access to your Desktop so you can browse and search folders there.";
+				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "RiverFlow needs access to your Documents folder so you can browse and search folders there.";
+				INFOPLIST_KEY_NSDownloadsFolderUsageDescription = "RiverFlow needs access to your Downloads folder so you can browse and search folders there.";
+				INFOPLIST_KEY_NSNetworkVolumesUsageDescription = "RiverFlow needs access to network volumes so you can browse and search folders on them.";
+				INFOPLIST_KEY_NSRemovableVolumesUsageDescription = "RiverFlow needs access to removable volumes so you can browse and search folders on them.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -443,6 +448,11 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = RiverFlow;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSDesktopFolderUsageDescription = "RiverFlow needs access to your Desktop so you can browse and search folders there.";
+				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "RiverFlow needs access to your Documents folder so you can browse and search folders there.";
+				INFOPLIST_KEY_NSDownloadsFolderUsageDescription = "RiverFlow needs access to your Downloads folder so you can browse and search folders there.";
+				INFOPLIST_KEY_NSNetworkVolumesUsageDescription = "RiverFlow needs access to network volumes so you can browse and search folders on them.";
+				INFOPLIST_KEY_NSRemovableVolumesUsageDescription = "RiverFlow needs access to removable volumes so you can browse and search folders on them.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

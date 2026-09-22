@@ -8,9 +8,12 @@ struct JumpToPathModalView: View {
     
     @State private var pathInput: String = "~/"
     @State private var suggestions: [PathSuggestion] = []
-    @State private var selectedSuggestionIndex: Int = 0
+    @State private var selectedSuggestionIndex: Int = -1
+    @State private var hasExplicitSuggestionSelection = false
     @State private var errorMessage: String? = nil
     @State private var suggestionTask: Task<Void, Never>? = nil
+    @State private var suggestionRequestID = 0
+    @State private var isLoadingSuggestions = false
     @FocusState private var isFieldFocused: Bool
     
     private let autocompleteService = PathAutocompleteService.shared
@@ -68,11 +71,12 @@ struct JumpToPathModalView: View {
                     ScrollView {
                         LazyVStack(spacing: 2) {
                             ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, suggestion in
-                                suggestionRow(suggestion, isSelected: index == selectedSuggestionIndex)
+                                suggestionRow(suggestion, isSelected: hasExplicitSuggestionSelection && index == selectedSuggestionIndex)
                                     .id(index)
                                     .contentShape(Rectangle())
                                     .onTapGesture {
                                         selectedSuggestionIndex = index
+                                        hasExplicitSuggestionSelection = true
                                         selectSuggestion(suggestion)
                                     }
                             }
@@ -80,14 +84,14 @@ struct JumpToPathModalView: View {
                         .padding(.vertical, 6)
                         .padding(.horizontal, 8)
                     }
-                    .frame(maxHeight: 240)
+                    .frame(maxHeight: .infinity)
                     .onChange(of: selectedSuggestionIndex) { _, newIndex in
                         withAnimation(.easeInOut(duration: 0.15)) {
                             proxy.scrollTo(newIndex, anchor: .center)
                         }
                     }
                 }
-            } else if !pathInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            } else if !isLoadingSuggestions && !pathInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 VStack(alignment: .center, spacing: 6) {
                     Text("No matching folders found")
                         .font(.headline)
@@ -99,7 +103,10 @@ struct JumpToPathModalView: View {
                         .font(.footnote)
                         .foregroundColor(.secondary.opacity(0.8))
                 }
-                .frame(maxWidth: .infinity, minHeight: 80)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             
             Divider()
@@ -129,7 +136,7 @@ struct JumpToPathModalView: View {
             .padding(.vertical, 10)
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 520)
+        .frame(width: 520, height: 400)
         .background(Material.regular)
         .cornerRadius(12)
         .overlay(
@@ -147,21 +154,27 @@ struct JumpToPathModalView: View {
         .onKeyPress(.downArrow) {
             if !suggestions.isEmpty {
                 selectedSuggestionIndex = (selectedSuggestionIndex + 1) % suggestions.count
+                hasExplicitSuggestionSelection = true
                 return .handled
             }
             return .ignored
         }
         .onKeyPress(.upArrow) {
             if !suggestions.isEmpty {
-                selectedSuggestionIndex = (selectedSuggestionIndex - 1 + suggestions.count) % suggestions.count
+                selectedSuggestionIndex = selectedSuggestionIndex <= 0
+                    ? suggestions.count - 1
+                    : selectedSuggestionIndex - 1
+                hasExplicitSuggestionSelection = true
                 return .handled
             }
             return .ignored
         }
         .onKeyPress(.tab) {
-            if !suggestions.isEmpty && selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.count {
-                let selected = suggestions[selectedSuggestionIndex]
-                pathInput = selected.relativeDisplayPath + "/"
+            if !suggestions.isEmpty {
+                let selectedIndex = selectedSuggestionIndex >= 0 ? selectedSuggestionIndex : 0
+                let selected = suggestions[selectedIndex]
+                pathInput = selected.relativeDisplayPath == "/" ? "/" : selected.relativeDisplayPath + "/"
+                hasExplicitSuggestionSelection = false
                 return .handled
             }
             return .ignored
@@ -229,9 +242,15 @@ struct JumpToPathModalView: View {
     private func updateSuggestions(for query: String) {
         errorMessage = nil
         suggestionTask?.cancel()
+        selectedSuggestionIndex = -1
+        hasExplicitSuggestionSelection = false
+        suggestionRequestID &+= 1
+        isLoadingSuggestions = true
+        suggestions = []
         
         let currentDir = viewModel.currentDir
         let autocompleteService = self.autocompleteService
+        let requestID = suggestionRequestID
         
         suggestionTask = Task {
             let newSuggestions = await Task.detached(priority: .userInitiated) {
@@ -241,9 +260,12 @@ struct JumpToPathModalView: View {
                 )
             }.value
             
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled,
+                  requestID == suggestionRequestID,
+                  query == pathInput else { return }
             self.suggestions = newSuggestions
-            self.selectedSuggestionIndex = 0
+            self.selectedSuggestionIndex = -1
+            self.isLoadingSuggestions = false
         }
     }
     
@@ -253,17 +275,13 @@ struct JumpToPathModalView: View {
     }
     
     private func submitCurrentSelection() {
-        if !suggestions.isEmpty && selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.count {
-            let selected = suggestions[selectedSuggestionIndex]
-            if pathInput.trimmingCharacters(in: .whitespacesAndNewlines) != selected.relativeDisplayPath {
-                selectSuggestion(selected)
-                return
-            }
-        }
-        
         let path = pathInput.trimmingCharacters(in: .whitespacesAndNewlines)
         if viewModel.jumpTo(path: path) {
             isPresented = false
+        } else if hasExplicitSuggestionSelection,
+                  selectedSuggestionIndex >= 0,
+                  selectedSuggestionIndex < suggestions.count {
+            selectSuggestion(suggestions[selectedSuggestionIndex])
         } else {
             errorMessage = "Folder \"\(path)\" could not be found or opened."
         }
