@@ -1,13 +1,13 @@
 name: "CodeQL Analysis"
 
 on:
-  push:
-    branches: [ "main" ]
-    paths-ignore:
-      - '**.md'
-      - '**.png'
-      - '**.jpg'
-      - '.github/**'
+  # push:
+  #   branches: [ "main" ]
+  #   paths-ignore:
+  #     - '**.md'
+  #     - '**.png'
+  #     - '**.jpg'
+  #     - '.github/**'
   schedule:
     - cron: '0 6 * * 1'
 
