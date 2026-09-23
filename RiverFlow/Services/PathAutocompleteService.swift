@@ -33,8 +33,17 @@ final class PathAutocompleteService: @unchecked Sendable {
     
     private let fileManager = FileManager.default
     
+    /// User home directory failsafe. 
+    /// Resolves the actual user home directory (e.g. /Users/username) even in containerized/archived environments.
+    static var userHomeDirectory: String {
+        if let pw = getpwuid(getuid()), let home = pw.pointee.pw_dir {
+            return FileManager.default.string(withFileSystemRepresentation: home, length: Int(strlen(home)))
+        }
+        return NSHomeDirectory()
+    }
+    
     /// Normalizes and expands an input path, replacing ~ with the user's home directory.
-    static func expandPath(_ path: String, currentDir: URL? = nil, homeDir: String = NSHomeDirectory()) -> String {
+    static func expandPath(_ path: String, currentDir: URL? = nil, homeDir: String = userHomeDirectory) -> String {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         
         if trimmed.isEmpty { return "" }
@@ -52,7 +61,7 @@ final class PathAutocompleteService: @unchecked Sendable {
     func autocompletionSuggestions(
         for query: String,
         currentDir: URL? = nil,
-        homeDir: String = NSHomeDirectory(),
+        homeDir: String = userHomeDirectory,
         maxResults: Int = 20
     ) -> [PathSuggestion] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -120,7 +129,7 @@ final class PathAutocompleteService: @unchecked Sendable {
                 ) {
                     for subdir in subdirs {
                         let subdirName = subdir.lastPathComponent.lowercased()
-                        if subdirName.hasPrefix(partialName) || subdirName.localizedCaseInsensitiveContains(partialName) {
+                        if subdirName.hasPrefix(partialName) {
                             addCandidate(subdir)
                         }
                     }
@@ -152,7 +161,7 @@ final class PathAutocompleteService: @unchecked Sendable {
                         ) {
                             for subdir in subdirs {
                                 let name = subdir.lastPathComponent.lowercased()
-                                if name.hasPrefix(searchWord) || name.localizedCaseInsensitiveContains(searchWord) {
+                                if name.hasPrefix(searchWord) {
                                     addCandidate(subdir)
                                 }
                             }

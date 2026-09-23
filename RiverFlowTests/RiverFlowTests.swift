@@ -1412,6 +1412,27 @@ import SwiftUI
         #expect(names2.contains("Alpaca"))
         #expect(!names2.contains("Beta"))
     }
+
+    @Test("PathAutocompleteService only suggests folder names that begin with the current path segment")
+    func pathAutocompleteServiceDoesNotReturnSubstringMatches() throws {
+        let mockHome = try Self.createTempDir()
+        defer { Self.deleteTempDir(at: mockHome) }
+
+        let apple = mockHome.appendingPathComponent("apple")
+        let unrelated = mockHome.appendingPathComponent("my-apple-backup")
+        try FileManager.default.createDirectory(at: apple, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: unrelated, withIntermediateDirectories: true)
+
+        let suggestions = PathAutocompleteService().autocompletionSuggestions(
+            for: "appl",
+            currentDir: mockHome,
+            homeDir: mockHome.path
+        )
+
+        let names = suggestions.map(\.displayName)
+        #expect(names.contains("apple"))
+        #expect(!names.contains("my-apple-backup"))
+    }
     
     @Test("PathAutocompleteService autocompletionSuggestions respects maxResults")
     func pathAutocompleteServiceAutocompletionSuggestionsRespectsMaxResults() throws {
@@ -1640,5 +1661,4 @@ import SwiftUI
         #expect(contextMenu != nil)
     }
 }
-
 
