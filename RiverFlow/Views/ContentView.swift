@@ -93,7 +93,6 @@ struct ContentView: View {
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openWindow) private var openWindow
     @State private var viewModel = FolderViewModel()
-    @State private var selectedFolderURL: URL? = SideBarItem.home.url.standardizedFileURL
     @State private var selectedFileViewStyle: FileViewStyle = .grid
     @State private var refreshTrigger = 0
     @State private var goUpTrigger = 0
@@ -146,19 +145,9 @@ struct ContentView: View {
         } detail: {
             detailView
         }
-        .onChange(of: selectedFolderURL) { _, newValue in
+        .onChange(of: viewModel.currentDir) { _, _ in
             viewModel.selectedFileIds = []
             isMoveUpTargeted = false
-            if let newURL = newValue, viewModel.currentDir.standardizedFileURL != newURL.standardizedFileURL {
-                viewModel.currentDir = newURL
-                viewModel.loadCurrentDirectory()
-            }
-        }
-        .onChange(of: viewModel.currentDir) { _, newValue in
-            let standardized = newValue.standardizedFileURL
-            if selectedFolderURL?.standardizedFileURL != standardized {
-                selectedFolderURL = standardized
-            }
         }
         .onAppear() {
             SoundEffects.warmUpAudioEngine()
@@ -234,7 +223,8 @@ struct ContentView: View {
     }
 
     private var sidebarView: some View {
-        SidebarView(viewModel: viewModel, selectedFolderURL: $selectedFolderURL)
+        SidebarView(viewModel: viewModel)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 420)
     }
 
     @ViewBuilder
