@@ -3,7 +3,7 @@ import Observation
 
 @Observable
 class SidebarNode: Identifiable, Hashable {
-    var id: URL { url }
+    let id = UUID()
     let name: String
     let url: URL
     let iconName: String
@@ -14,6 +14,7 @@ class SidebarNode: Identifiable, Hashable {
     var children: [SidebarNode] = []
     
     private var hasSubfoldersCached: Bool? = nil
+    private var loadedWithHiddenFiles: Bool? = nil
     
     init(name: String, url: URL, iconName: String, isRoot: Bool = false) {
         self.name = name
@@ -30,7 +31,13 @@ class SidebarNode: Identifiable, Hashable {
         hasher.combine(id)
     }
     
-    var hasSubfolders: Bool {
+    func hasSubfolders(showHidden: Bool) -> Bool {
+        if loadedWithHiddenFiles != showHidden {
+            hasSubfoldersCached = nil
+            if isLoaded {
+                loadChildren(showHidden: showHidden)
+            }
+        }
         if let cached = hasSubfoldersCached {
             return cached
         }
@@ -39,23 +46,24 @@ class SidebarNode: Identifiable, Hashable {
             hasSubfoldersCached = val
             return val
         }
-        let val = checkHasSubfolders()
+        let val = checkHasSubfolders(showHidden: showHidden)
         hasSubfoldersCached = val
+        loadedWithHiddenFiles = showHidden
         return val
     }
     
-    private func checkHasSubfolders() -> Bool {
+    private func checkHasSubfolders(showHidden: Bool) -> Bool {
         let fileManager = FileManager.default
         do {
             let keys: [URLResourceKey] = [.isDirectoryKey, .isHiddenKey]
-            let contents = try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: keys, options: .skipsHiddenFiles)
+            let contents = try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: keys, options: showHidden ? [] : .skipsHiddenFiles)
             for itemURL in contents {
                 let resourceValues = try? itemURL.resourceValues(forKeys: Set(keys))
                 let isDir = resourceValues?.isDirectory ?? false
                 let isHidden = resourceValues?.isHidden ?? false
                 let startsWithDot = itemURL.lastPathComponent.hasPrefix(".")
                 
-                if isDir && !isHidden && !startsWithDot {
+                if isDir && (showHidden || (!isHidden && !startsWithDot)) {
                     let ext = itemURL.pathExtension.lowercased()
                     if ext != "app" && ext != "xcodeproj" && ext != "xcworkspace" {
                         return true
@@ -68,8 +76,9 @@ class SidebarNode: Identifiable, Hashable {
     
     /// Loads the immediate child folders (directories only) of this node.
     func loadChildren(showHidden: Bool) {
-        guard !isLoaded else { return }
+        guard !isLoaded || loadedWithHiddenFiles != showHidden else { return }
         isLoaded = true
+        loadedWithHiddenFiles = showHidden
         
         let fileManager = FileManager.default
         do {
@@ -82,6 +91,7 @@ class SidebarNode: Identifiable, Hashable {
             )
             
             var subfolders: [SidebarNode] = []
+            let existingChildren = Dictionary(uniqueKeysWithValues: children.map { ($0.url, $0) })
             for itemURL in contents {
                 let resourceValues = try? itemURL.resourceValues(forKeys: Set(keys))
                 let isDir = resourceValues?.isDirectory ?? false
@@ -98,7 +108,7 @@ class SidebarNode: Identifiable, Hashable {
                         continue
                     }
                     
-                    subfolders.append(SidebarNode(
+                    subfolders.append(existingChildren[itemURL.standardizedFileURL] ?? SidebarNode(
                         name: itemURL.lastPathComponent,
                         url: itemURL.standardizedFileURL,
                         iconName: "folder"
@@ -118,18 +128,55 @@ class SidebarNode: Identifiable, Hashable {
     
     /// Reloads the child folders, preserving the expansion state of existing child nodes if possible.
     func reloadChildren(showHidden: Bool) {
-        let oldChildrenMap = Dictionary(uniqueKeysWithValues: children.map { ($0.url, $0) })
         isLoaded = false
         hasSubfoldersCached = nil
         loadChildren(showHidden: showHidden)
         
         for child in children {
-            if let oldChild = oldChildrenMap[child.url] {
-                child.isExpanded = oldChild.isExpanded
-                if oldChild.isLoaded {
-                    child.reloadChildren(showHidden: showHidden)
-                }
+            if child.isExpanded {
+                child.reloadChildren(showHidden: showHidden)
+            } else {
+                child.invalidateChildren()
             }
         }
     }
+
+    func invalidateChildren() {
+        isLoaded = false
+        hasSubfoldersCached = nil
+    }
+
+    /// Discard hidden expansion state so reopening a branch starts at one level.
+    func collapse() {
+        isExpanded = false
+        invalidateChildren()
+        for child in children {
+            child.collapse()
+        }
+    }
+
+    /// Close everything outside the path without reading any new directories.
+    func collapseOutsidePath(to target: URL) {
+        for child in children {
+            if child.url != target && Self.contains(target, in: child.url) {
+                child.collapseOutsidePath(to: target)
+            } else {
+                child.collapse()
+            }
+        }
+    }
+
+    static func contains(_ target: URL, in directory: URL) -> Bool {
+        let parent = directory.standardizedFileURL.pathComponents
+        let child = target.standardizedFileURL.pathComponents
+        return child.starts(with: parent)
+    }
+}
+
+struct SidebarEntry: Identifiable {
+    let node: SidebarNode
+    let rootID: UUID
+    let depth: Int
+
+    var id: UUID { node.id }
 }

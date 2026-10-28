@@ -20,6 +20,19 @@ class FolderViewModel {
     var files: [FileItem] = []
     var currentSortingOption: FileSortOption = .name
     var sidebarRoots: [SidebarNode] = []
+    var selectedSidebarNodeID: UUID?
+    var sidebarRevealRevision = 0
+    private var preferredSidebarRootID: UUID?
+    private var lastSidebarDirectory: URL?
+
+    var visibleSidebarEntries: [SidebarEntry] {
+        func entries(for node: SidebarNode, rootID: UUID, depth: Int) -> [SidebarEntry] {
+            let row = SidebarEntry(node: node, rootID: rootID, depth: depth)
+            guard node.isExpanded else { return [row] }
+            return [row] + node.children.flatMap { entries(for: $0, rootID: rootID, depth: depth + 1) }
+        }
+        return sidebarRoots.flatMap { entries(for: $0, rootID: $0.id, depth: 0) }
+    }
     
     var editingFileID: UUID? = nil
     var selectedFileIds: Set<UUID> = []
@@ -99,9 +112,9 @@ class FolderViewModel {
         files.filter { selectedFileIds.contains($0.id) }
     }
     
-    init(startDir: URL = URL(fileURLWithPath: PathAutocompleteService.userHomeDirectory)) {
+    init(startDir: URL = URL(fileURLWithPath: PathAutocompleteService.userHomeDirectory), sidebarRoots: [SidebarNode]? = nil) {
         self.currentDir = startDir
-        self.sidebarRoots = SideBarItem.allCases.map { item in
+        self.sidebarRoots = sidebarRoots ?? SideBarItem.allCases.map { item in
             SidebarNode(name: item.rawValue, url: item.url, iconName: item.iconName, isRoot: true)
         }
         loadCurrentDirectory()
@@ -358,57 +371,108 @@ class FolderViewModel {
             
             updateStatusBar()
             updateGitStatus()
-            reloadSidebarTree()
-            expandToURL(currentDir)
         } catch {
             print("Error while reading directory \(error.localizedDescription)")
             self.files = []
         }
+        let target = currentDir.standardizedFileURL
+        if lastSidebarDirectory != target {
+            expandToURL(target)
+        }
+        reloadSidebarTree()
     }
     
     /// Reloads the loaded folders in the sidebar tree.
     func reloadSidebarTree() {
         for root in sidebarRoots {
-            if root.isLoaded {
+            if root.isExpanded {
                 root.reloadChildren(showHidden: showHiddenFiles)
+            } else {
+                root.invalidateChildren()
             }
         }
     }
     
-    /// Recursively traverses and expands the sidebar nodes leading to the target URL.
+    /// Reveal exactly one route. Explicit sidebar navigation keeps its chosen root;
+    /// otherwise the most specific shortcut avoids expanding all of This Mac.
     func expandToURL(_ targetURL: URL) {
         let target = targetURL.standardizedFileURL
+        lastSidebarDirectory = target
+        let candidates = sidebarRoots.filter { SidebarNode.contains(target, in: $0.url) }
+        let root = candidates.first { $0.id == preferredSidebarRootID }
+            ?? candidates.max { $0.url.pathComponents.count < $1.url.pathComponents.count }
+        if root?.id != preferredSidebarRootID {
+            preferredSidebarRootID = nil
+        }
         for root in sidebarRoots {
-            if isParent(parent: root.url, child: target) {
-                var current = root
-                while current.url != target {
-                    current.isExpanded = true
-                    current.loadChildren(showHidden: showHiddenFiles)
-                    
-                    if let nextNode = current.children.first(where: { isParent(parent: $0.url, child: target) }) {
-                        current = nextNode
-                    } else {
-                        break
-                    }
+            root.collapseOutsidePath(to: target)
+        }
+        for other in sidebarRoots where other.id != root?.id {
+            other.collapse()
+        }
+        selectedSidebarNodeID = nil
+        if var current = root {
+            while current.url != target {
+                current.isExpanded = true
+                current.loadChildren(showHidden: showHiddenFiles)
+                guard let next = current.children.first(where: { SidebarNode.contains(target, in: $0.url) }) else {
+                    break
                 }
+                current = next
+            }
+            if current.url == target {
+                current.collapse()
+                selectedSidebarNodeID = current.id
             }
         }
+        sidebarRevealRevision += 1
     }
-    
-    private func isParent(parent: URL, child: URL) -> Bool {
-        let parentPath = parent.standardizedFileURL.path
-        let childPath = child.standardizedFileURL.path
-        
-        if parentPath == childPath {
-            return true
+
+    func selectSidebarNode(_ id: UUID?) {
+        guard let entry = visibleSidebarEntries.first(where: { $0.id == id }) else { return }
+        preferredSidebarRootID = entry.rootID
+        if entry.node.url == currentDir.standardizedFileURL {
+            if selectedSidebarNodeID != entry.id {
+                expandToURL(entry.node.url)
+            }
+        } else {
+            navigateTo(url: entry.node.url)
         }
-        
-        if parentPath == "/" {
-            return true
+    }
+
+    func toggleSidebarNode(_ node: SidebarNode) {
+        if node.isExpanded {
+            node.collapse()
+        } else {
+            node.loadChildren(showHidden: showHiddenFiles)
+            node.isExpanded = !node.children.isEmpty
         }
-        
-        let prefix = parentPath.hasSuffix("/") ? parentPath : parentPath + "/"
-        return childPath.hasPrefix(prefix)
+    }
+
+    func collapseSidebar() {
+        sidebarRoots.forEach { $0.collapse() }
+    }
+
+    /// Match outline navigation while keeping disclosure independent of opening a folder.
+    @discardableResult
+    func moveInSidebar(expanding: Bool) -> Bool {
+        let entries = visibleSidebarEntries
+        guard let entry = entries.first(where: { $0.id == selectedSidebarNodeID }) else { return false }
+        if expanding {
+            if !entry.node.isExpanded {
+                toggleSidebarNode(entry.node)
+            } else if let child = entry.node.children.first {
+                selectSidebarNode(child.id)
+            }
+        } else if entry.node.isExpanded {
+            entry.node.collapse()
+        } else if let parent = entries.last(where: {
+            $0.rootID == entry.rootID && $0.depth == entry.depth - 1
+                && SidebarNode.contains(entry.node.url, in: $0.node.url)
+        }) {
+            selectSidebarNode(parent.id)
+        }
+        return true
     }
     
     /// Navigates into the specified directory.
@@ -482,6 +546,7 @@ class FolderViewModel {
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir), isDir.boolValue {
             let targetURL = URL(fileURLWithPath: expanded).standardizedFileURL
+            preferredSidebarRootID = nil
             navigateTo(url: targetURL)
             return true
         }
