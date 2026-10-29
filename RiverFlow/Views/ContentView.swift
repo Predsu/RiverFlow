@@ -94,6 +94,7 @@ struct ContentView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var viewModel = FolderViewModel()
     @State private var selectedFileViewStyle: FileViewStyle = .grid
+    @SceneStorage("isFilePreviewPresented") private var isFilePreviewPresented = true
     @State private var refreshTrigger = 0
     @State private var goUpTrigger = 0
     @State private var lastAnchorFileId: UUID?
@@ -250,11 +251,21 @@ struct ContentView: View {
                 .background(Material.ultraThin)
             }
             
-            Group {
-                if selectedFileViewStyle == .list {
-                    listView
-                } else {
-                    gridView
+            HSplitView {
+                Group {
+                    if selectedFileViewStyle == .list {
+                        listView
+                    } else {
+                        gridView
+                    }
+                }
+                .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+
+                if isFilePreviewPresented {
+                    FilePreviewPanel(files: viewModel.previewFiles) {
+                        isFilePreviewPresented = false
+                    }
+                    .frame(minWidth: 260, idealWidth: 300, maxWidth: 500, maxHeight: .infinity)
                 }
             }
         }
@@ -329,6 +340,14 @@ struct ContentView: View {
                 )
             }
             
+            ToolbarItem(placement: .primaryAction) {
+                Toggle(isOn: $isFilePreviewPresented) {
+                    Label("Preview", systemImage: "sidebar.right")
+                }
+                .help(isFilePreviewPresented ? "Hide Preview" : "Show Preview")
+                .accessibilityIdentifier("toggleFilePreview")
+            }
+
             ToolbarItem(placement: .primaryAction) {
                 Toggle(isOn: $viewModel.showHiddenFiles) {
                     Label("Show Hidden", systemImage: viewModel.showHiddenFiles ? "eye" : "eye.slash")

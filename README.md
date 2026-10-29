@@ -53,16 +53,16 @@ Developer tools
 
 Native macOS experience
 
-- SwiftUI-based interface using NavigationSplitView.
-- Native AppKit file operations and system pasteboard integration.
-- Standard macOS keyboard commands for copying, cutting and pasting.
-- Command-click and Shift-click multi-selection.
-- Selection rectangle support.
-- Native drag-and-drop interactions.
-- Native in-app tabs support
-- System thumbnails and file metadata.
-- Integrated sound effects.
-- Native support for Apple silicon and Intel Macs.
+* SwiftUI-based interface using `NavigationSplitView`.
+* Native AppKit file operations and system pasteboard integration.
+* Standard macOS keyboard commands for copying, cutting and pasting.
+* Command-click and Shift-click multi-selection.
+* Selection rectangle support.
+* Native drag-and-drop interactions.
+* System thumbnails and file metadata.
+* Resizable live preview panel for a selected local file, using macOS Quick Look.
+* Integrated sound effects and launch splash screen.
+* Native support for Apple silicon and Intel Macs.
 
 ---
 
