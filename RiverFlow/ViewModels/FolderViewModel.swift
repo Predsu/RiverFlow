@@ -111,6 +111,10 @@ class FolderViewModel {
     var selectedFiles: [FileItem] {
         files.filter { selectedFileIds.contains($0.id) }
     }
+
+    var previewFiles: [FileItem] {
+        sortedFiles.filter { selectedFileIds.contains($0.id) }
+    }
     
     init(startDir: URL = URL(fileURLWithPath: PathAutocompleteService.userHomeDirectory), sidebarRoots: [SidebarNode]? = nil) {
         self.currentDir = startDir
