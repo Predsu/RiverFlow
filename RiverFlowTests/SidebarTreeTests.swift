@@ -267,6 +267,100 @@ import Testing
         #expect(restored.favoriteSidebarRoots.map(\.url) == expected)
     }
 
+    @Test("Paste undo and redo persist favorite paths for moves and leave copies unchanged", arguments: [false, true])
+    func pasteUndoAndRedoPersistFavoritePaths(isCut: Bool) throws {
+        let (directory, roots) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suite = "SidebarFavoritesTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let source = roots[1].url
+        let destination = roots[2].url.appendingPathComponent("Projects")
+        let model = FolderViewModel(startDir: roots[2].url, sidebarRoots: roots, sidebarDefaults: defaults)
+        let undoManager = UndoManager()
+        model.undoManager = undoManager
+        model.addSidebarFavorites([source, source.appendingPathComponent("App/Sources/Deep"), roots[2].url])
+        model.pasteboardURLs = [source]
+        model.isOperationCut = isCut
+        model.pasteFiles()
+
+        func expectFavorites(at root: URL) {
+            let expected = [root.path, root.appendingPathComponent("App/Sources/Deep").path, roots[2].url.path]
+            #expect(model.favoriteSidebarRoots.map { $0.url.path } == expected)
+            #expect(defaults.stringArray(forKey: "sidebarFavoriteDirectoryPaths") == expected)
+            let restored = FolderViewModel(startDir: roots[2].url, sidebarRoots: roots, sidebarDefaults: defaults)
+            #expect(restored.favoriteSidebarRoots.map { $0.url.path } == expected)
+        }
+        expectFavorites(at: isCut ? destination : source)
+        #expect(undoManager.canUndo)
+        undoManager.undo()
+        expectFavorites(at: source)
+        #expect(!FileManager.default.fileExists(atPath: destination.path))
+        #expect(undoManager.canRedo)
+        undoManager.redo()
+        expectFavorites(at: isCut ? destination : source)
+        #expect(FileManager.default.fileExists(atPath: destination.path))
+    }
+
+    @Test("Failed cut paste undo or redo leaves favorite paths unchanged", arguments: [false, true])
+    func failedCutPasteUndoOrRedoLeavesFavoritesUnchanged(failUndo: Bool) throws {
+        let (directory, roots) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suite = "SidebarFavoritesTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let source = roots[1].url
+        let destination = roots[2].url.appendingPathComponent("Projects")
+        let model = FolderViewModel(startDir: roots[2].url, sidebarRoots: roots, sidebarDefaults: defaults)
+        let undoManager = UndoManager()
+        model.undoManager = undoManager
+        model.addSidebarFavorites([source, source.appendingPathComponent("App/Sources/Deep")])
+        model.pasteboardURLs = [source]
+        model.isOperationCut = true
+        model.pasteFiles()
+        if !failUndo { undoManager.undo() }
+        let occupied = failUndo ? source : destination
+        try FileManager.default.createDirectory(at: occupied, withIntermediateDirectories: true)
+        let before = model.favoriteSidebarRoots.map { $0.url.path }
+
+        if failUndo { undoManager.undo() } else { undoManager.redo() }
+
+        #expect(model.favoriteSidebarRoots.map { $0.url.path } == before)
+        #expect(defaults.stringArray(forKey: "sidebarFavoriteDirectoryPaths") == before)
+        let restored = FolderViewModel(startDir: roots[2].url, sidebarRoots: roots, sidebarDefaults: defaults)
+        #expect(restored.favoriteSidebarRoots.map { $0.url.path } == before)
+    }
+
+    @Test("Creating a folder from selection persists favorites after each successful move", arguments: [false, true])
+    func creatingFolderFromSelectionRemapsFavoritesAfterEachMove(failSecondMove: Bool) throws {
+        let (directory, roots) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suite = "SidebarFavoritesTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = FolderViewModel(startDir: directory, sidebarRoots: roots, sidebarDefaults: defaults)
+        model.addSidebarFavorites([roots[1].url, roots[1].url.appendingPathComponent("App/Sources/Deep"), roots[2].url])
+        let projects = try #require(model.files.first { $0.name == "Projects" })
+        let downloads = try #require(model.files.first { $0.name == "Downloads" })
+        try FileManager.default.createDirectory(at: directory.appendingPathComponent("New Folder"), withIntermediateDirectories: true)
+        if failSecondMove {
+            try FileManager.default.removeItem(at: downloads.url)
+        }
+
+        model.createFolderFromSelection(files: [projects, downloads])
+
+        let destination = directory.appendingPathComponent("New Folder 1")
+        let expectedProjects = destination.appendingPathComponent("Projects")
+        let expectedDownloads = failSecondMove ? roots[2].url : destination.appendingPathComponent("Downloads")
+        let expected = [expectedProjects.path, expectedProjects.appendingPathComponent("App/Sources/Deep").path, expectedDownloads.path]
+        #expect(model.favoriteSidebarRoots.map { $0.url.path } == expected)
+        #expect(defaults.stringArray(forKey: "sidebarFavoriteDirectoryPaths") == expected)
+        #expect(FileManager.default.fileExists(atPath: expected[1]))
+        let restored = FolderViewModel(startDir: directory, sidebarRoots: roots, sidebarDefaults: defaults)
+        #expect(restored.favoriteSidebarRoots.map { $0.url.path } == (failSecondMove ? Array(expected.prefix(2)) : expected))
+        #expect(restored.unavailableFavoriteSidebarRoots.map { $0.url.path } == (failSecondMove ? [expectedDownloads.path] : []))
+    }
+
     @Test("Restored favorites exclude unavailable paths, files, and packages")
     func restoredFavoritesExcludeUnavailablePathsFilesAndPackages() throws {
         let (directory, roots) = try fixture()
@@ -291,6 +385,66 @@ import Testing
 
         #expect(model.favoriteSidebarRoots.map(\.url) == [roots[2].url, roots[1].url])
         #expect(model.visibleSidebarEntries.map { $0.node.url } == [roots[2].url, roots[1].url] + roots.map(\.url))
+    }
+
+    @Test("Unavailable saved favorites survive edits until explicitly removed")
+    func unavailableSavedFavoritesSurviveEditsUntilExplicitlyRemoved() throws {
+        let (directory, roots) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suite = "SidebarFavoritesTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let missing = directory.appendingPathComponent("Offline")
+        let file = directory.appendingPathComponent("notes.txt")
+        try Data("test".utf8).write(to: file)
+        let package = directory.appendingPathComponent("Example.app")
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        let unavailablePaths = [missing.path, file.path, package.path]
+        defaults.set([roots[1].url.path] + unavailablePaths + [missing.path], forKey: "sidebarFavoriteDirectoryPaths")
+        let model = FolderViewModel(startDir: directory, sidebarRoots: roots, sidebarDefaults: defaults)
+        #expect(model.unavailableFavoriteSidebarRoots.map { $0.url.path } == unavailablePaths)
+        model.addSidebarFavorites([roots[2].url])
+        #expect(defaults.stringArray(forKey: "sidebarFavoriteDirectoryPaths") == [roots[1].url.path, roots[2].url.path] + unavailablePaths)
+        let added = try #require(model.favoriteSidebarRoots.first { $0.url == roots[2].url })
+        model.removeSidebarFavorite(added)
+        #expect(defaults.stringArray(forKey: "sidebarFavoriteDirectoryPaths") == [roots[1].url.path] + unavailablePaths)
+        let item = try #require(model.files.first { $0.name == "Projects" })
+        model.renameFile(file: item, to: "Renamed")
+        let renamed = directory.appendingPathComponent("Renamed")
+        #expect(defaults.stringArray(forKey: "sidebarFavoriteDirectoryPaths") == [renamed.path] + unavailablePaths)
+
+        let restored = FolderViewModel(startDir: directory, sidebarRoots: roots, sidebarDefaults: defaults)
+        #expect(restored.favoriteSidebarRoots.map { $0.url.path } == [renamed.path])
+        #expect(restored.unavailableFavoriteSidebarRoots.map { $0.url.path } == unavailablePaths)
+        let offlineFavorite = try #require(restored.unavailableFavoriteSidebarRoots.first)
+        restored.removeSidebarFavorite(offlineFavorite)
+        #expect(defaults.stringArray(forKey: "sidebarFavoriteDirectoryPaths") == [renamed.path, file.path, package.path])
+        try FileManager.default.createDirectory(at: missing, withIntermediateDirectories: true)
+        let afterRemoval = FolderViewModel(startDir: directory, sidebarRoots: roots, sidebarDefaults: defaults)
+        #expect(afterRemoval.favoriteSidebarRoots.map { $0.url.path } == [renamed.path])
+    }
+
+    @Test("Unavailable favorites restore when accessible and can be re-added without duplicates")
+    func unavailableFavoritesRestoreAndCanBeReaddedWithoutDuplicates() throws {
+        let (directory, roots) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suite = "SidebarFavoritesTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let missing = directory.appendingPathComponent("Offline")
+        defaults.set([missing.path], forKey: "sidebarFavoriteDirectoryPaths")
+        let model = FolderViewModel(startDir: directory, sidebarRoots: roots, sidebarDefaults: defaults)
+        try FileManager.default.createDirectory(at: missing, withIntermediateDirectories: true)
+        let restored = FolderViewModel(startDir: directory, sidebarRoots: roots, sidebarDefaults: defaults)
+        #expect(restored.favoriteSidebarRoots.map { $0.url.path } == [missing.path])
+        #expect(restored.unavailableFavoriteSidebarRoots.isEmpty)
+
+        #expect(model.addSidebarFavorites([missing]))
+        #expect(model.unavailableFavoriteSidebarRoots.isEmpty)
+        #expect(model.favoriteSidebarRoots.map { $0.url.path } == [missing.path])
+        #expect(defaults.stringArray(forKey: "sidebarFavoriteDirectoryPaths") == [missing.path])
+        model.removeSidebarFavorite(try #require(model.favoriteSidebarRoots.first))
+        #expect(defaults.stringArray(forKey: "sidebarFavoriteDirectoryPaths") == [])
     }
 
     @Test("Favorite trees support navigation and fall back to Locations when removed", arguments: [false, true])

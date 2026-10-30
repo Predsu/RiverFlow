@@ -21,6 +21,7 @@ class FolderViewModel {
     var currentSortingOption: FileSortOption = .name
     var sidebarRoots: [SidebarNode] = []
     private(set) var favoriteSidebarRoots: [SidebarNode] = []
+    private(set) var unavailableFavoriteSidebarRoots: [SidebarNode] = []
     private let sidebarDefaults: UserDefaults
     private static let sidebarFavoritesKey = "sidebarFavoriteDirectoryPaths"
 
@@ -125,13 +126,21 @@ class FolderViewModel {
     init(startDir: URL = URL(fileURLWithPath: PathAutocompleteService.userHomeDirectory), sidebarRoots: [SidebarNode]? = nil, sidebarDefaults: UserDefaults = .standard) {
         self.sidebarDefaults = sidebarDefaults
         var restoredPaths = Set<String>()
-        self.favoriteSidebarRoots = (sidebarDefaults.stringArray(forKey: Self.sidebarFavoritesKey) ?? []).compactMap { path in
+        var availableFavorites: [SidebarNode] = []
+        var unavailableFavorites: [SidebarNode] = []
+        for path in sidebarDefaults.stringArray(forKey: Self.sidebarFavoritesKey) ?? [] {
             let url = URL(fileURLWithPath: path).standardizedFileURL
+            guard restoredPaths.insert(url.path).inserted else { continue }
+            let node = Self.favoriteNode(for: url)
             guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey]),
-                  values.isDirectory == true, values.isPackage != true else { return nil }
-            guard restoredPaths.insert(url.path).inserted else { return nil }
-            return Self.favoriteNode(for: url)
+                  values.isDirectory == true, values.isPackage != true else {
+                unavailableFavorites.append(node)
+                continue
+            }
+            availableFavorites.append(node)
         }
+        self.favoriteSidebarRoots = availableFavorites
+        self.unavailableFavoriteSidebarRoots = unavailableFavorites
         self.currentDir = startDir
         self.sidebarRoots = sidebarRoots ?? SideBarItem.allCases.map { item in
             SidebarNode(name: item.rawValue, url: item.url, iconName: item.iconName, isRoot: true)
@@ -155,6 +164,7 @@ class FolderViewModel {
                   values.isDirectory == true, values.isPackage != true else { continue }
             accepted = true
             guard !favoriteSidebarRoots.contains(where: { $0.url == normalized }) else { continue }
+            unavailableFavoriteSidebarRoots.removeAll { $0.url.path == normalized.path }
             favoriteSidebarRoots.append(Self.favoriteNode(for: normalized))
             changed = true
         }
@@ -163,16 +173,17 @@ class FolderViewModel {
     }
 
     func removeSidebarFavorite(_ node: SidebarNode) {
-        guard favoriteSidebarRoots.contains(where: { $0.id == node.id }) else { return }
+        guard (favoriteSidebarRoots + unavailableFavoriteSidebarRoots).contains(where: { $0.id == node.id }) else { return }
         let removedSelection = selectedSidebarNodeID.map { node.containsNode(withID: $0) } ?? false
         favoriteSidebarRoots.removeAll { $0.id == node.id }
+        unavailableFavoriteSidebarRoots.removeAll { $0.id == node.id }
         saveSidebarFavorites()
         if preferredSidebarRootID == node.id { preferredSidebarRootID = nil }
         if removedSelection { expandToURL(currentDir) }
     }
 
     private func saveSidebarFavorites() {
-        sidebarDefaults.set(favoriteSidebarRoots.map { $0.url.path }, forKey: Self.sidebarFavoritesKey)
+        sidebarDefaults.set((favoriteSidebarRoots + unavailableFavoriteSidebarRoots).map { $0.url.path }, forKey: Self.sidebarFavoritesKey)
     }
 
     private func remapSidebarFavorites(from sourceURL: URL, to destinationURL: URL) {
@@ -998,7 +1009,9 @@ class FolderViewModel {
             for pair in pastedPairs {
                 do {
                     if wasCut {
+                        let source = pair.destination.standardizedFileURL
                         try FileManager.default.moveItem(at: pair.destination, to: pair.source)
+                        target.remapSidebarFavorites(from: source, to: pair.source)
                     } else {
                         try FileManager.default.removeItem(at: pair.destination)
                     }
@@ -1016,7 +1029,9 @@ class FolderViewModel {
             for pair in pastedPairs {
                 do {
                     if wasCut {
+                        let source = pair.source.standardizedFileURL
                         try FileManager.default.moveItem(at: pair.source, to: pair.destination)
+                        target.remapSidebarFavorites(from: source, to: pair.destination)
                     } else {
                         try FileManager.default.copyItem(at: pair.source, to: pair.destination)
                     }
@@ -1159,8 +1174,10 @@ class FolderViewModel {
         do {
             try fileManager.createDirectory(at: uniqueFolderURL, withIntermediateDirectories: true)
             for file in files {
+                let source = file.url.standardizedFileURL
                 let destination = uniqueFolderURL.appendingPathComponent(file.url.lastPathComponent)
                 try fileManager.moveItem(at: file.url, to: destination)
+                remapSidebarFavorites(from: source, to: destination)
             }
             
             loadCurrentDirectory()
