@@ -129,4 +129,63 @@ import Testing
         #expect(model.currentDir == roots[1].url)
         #expect(model.selectedSidebarNodeID == roots[1].id)
     }
+
+    @Test("Favorites accept directories once, persist in order, and leave files in place")
+    func favoritesAcceptDirectoriesOncePersistInOrderAndLeaveFilesInPlace() throws {
+        let (directory, roots) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suite = "SidebarFavoritesTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = FolderViewModel(startDir: directory, sidebarRoots: roots, sidebarDefaults: defaults)
+        let file = directory.appendingPathComponent("notes.txt")
+        try Data("test".utf8).write(to: file)
+        let package = directory.appendingPathComponent("Example.app")
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        #expect(!model.addSidebarFavorites([file, package, URL(string: "https://example.com")!, directory.appendingPathComponent("missing")]))
+        #expect(model.addSidebarFavorites([roots[1].url, roots[2].url, roots[1].url.appendingPathComponent(".")]))
+        #expect(model.favoriteSidebarRoots.map(\.url) == [roots[1].url, roots[2].url])
+        #expect(model.addSidebarFavorites([roots[1].url]))
+        #expect(model.favoriteSidebarRoots.count == 2)
+        #expect(FileManager.default.fileExists(atPath: roots[1].url.path))
+        #expect(try String(contentsOf: file, encoding: .utf8) == "test")
+        let restored = FolderViewModel(startDir: directory, sidebarRoots: roots, sidebarDefaults: defaults)
+        #expect(restored.favoriteSidebarRoots.map(\.url) == [roots[1].url, roots[2].url])
+        restored.removeSidebarFavorite(restored.favoriteSidebarRoots[0])
+        let afterRemoval = FolderViewModel(startDir: directory, sidebarRoots: roots, sidebarDefaults: defaults)
+        #expect(afterRemoval.favoriteSidebarRoots.map(\.url) == [roots[2].url])
+        #expect(FileManager.default.fileExists(atPath: roots[1].url.path))
+    }
+
+    @Test("Favorite trees support navigation and fall back to Locations when removed")
+    func favoriteTreesSupportNavigationAndFallBackToLocationsWhenRemoved() throws {
+        let (directory, roots) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suite = "SidebarFavoritesTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = FolderViewModel(startDir: directory, sidebarRoots: roots, sidebarDefaults: defaults)
+        model.addSidebarFavorites([roots[1].url])
+        let favorite = try #require(model.favoriteSidebarRoots.first)
+        #expect(favorite.id != roots[1].id)
+        model.selectSidebarNode(favorite.id)
+        #expect(model.currentDir == favorite.url)
+        #expect(model.selectedSidebarNodeID == favorite.id)
+        model.moveInSidebar(expanding: true)
+        #expect(favorite.isExpanded)
+        model.moveInSidebar(expanding: true)
+        #expect(model.currentDir == favorite.url.appendingPathComponent("App"))
+        model.navigateTo(url: favorite.url.appendingPathComponent("App/Sources/Deep"))
+        let selected = try #require(model.visibleSidebarEntries.first { $0.id == model.selectedSidebarNodeID })
+        #expect(selected.rootID == favorite.id)
+        model.loadCurrentDirectory()
+        #expect(model.selectedSidebarNodeID == selected.id)
+        model.removeSidebarFavorite(favorite)
+        #expect(model.currentDir == selected.node.url)
+        #expect(model.favoriteSidebarRoots.isEmpty)
+        let fallback = try #require(model.visibleSidebarEntries.first { $0.id == model.selectedSidebarNodeID })
+        #expect(fallback.rootID == roots[1].id)
+        #expect(fallback.node.url == model.currentDir)
+    }
+
 }

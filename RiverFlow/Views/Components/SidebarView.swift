@@ -2,6 +2,34 @@ import SwiftUI
 
 struct SidebarView: View {
     let viewModel: FolderViewModel
+    @State private var isFavoritesDropTargeted = false
+
+    private var favoriteEntries: [SidebarEntry] {
+        let rootIDs = Set(viewModel.favoriteSidebarRoots.map(\.id))
+        return viewModel.visibleSidebarEntries.filter { rootIDs.contains($0.rootID) }
+    }
+
+    private var locationEntries: [SidebarEntry] {
+        let rootIDs = Set(viewModel.sidebarRoots.map(\.id))
+        return viewModel.visibleSidebarEntries.filter { rootIDs.contains($0.rootID) }
+    }
+
+    private func sidebarRow(_ entry: SidebarEntry) -> some View {
+        SidebarNodeRow(
+            node: entry.node,
+            depth: entry.depth,
+            showHiddenFiles: viewModel.showHiddenFiles,
+            onToggle: { viewModel.toggleSidebarNode(entry.node) }
+        )
+        .tag(entry.id)
+        .id(entry.id)
+        .draggable(entry.node.url)
+        .dropDestination(for: URL.self) { urls, _ in
+            viewModel.addSidebarFavorites(urls)
+        } isTargeted: { targeted in
+            isFavoritesDropTargeted = targeted
+        }
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -9,18 +37,52 @@ struct SidebarView: View {
                 get: { viewModel.selectedSidebarNodeID },
                 set: { viewModel.selectSidebarNode($0) }
             )) {
-                ForEach(viewModel.visibleSidebarEntries) { entry in
-                    SidebarNodeRow(
-                        node: entry.node,
-                        depth: entry.depth,
-                        showHiddenFiles: viewModel.showHiddenFiles,
-                        onToggle: { viewModel.toggleSidebarNode(entry.node) }
-                    )
-                    .tag(entry.id)
-                    .id(entry.id)
+                Section {
+                    if viewModel.favoriteSidebarRoots.isEmpty {
+                        Label("Drop folders here", systemImage: "star")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 6)
+                            .selectionDisabled()
+                            .contentShape(Rectangle())
+                            .dropDestination(for: URL.self) { urls, _ in
+                                viewModel.addSidebarFavorites(urls)
+                            } isTargeted: { targeted in
+                                isFavoritesDropTargeted = targeted
+                            }
+                    }
+                    ForEach(favoriteEntries) { entry in
+                        sidebarRow(entry)
+                            .contextMenu {
+                                if entry.depth == 0 {
+                                    Button("Remove from Favorites", systemImage: "star.slash") {
+                                        viewModel.removeSidebarFavorite(entry.node)
+                                    }
+                                }
+                            }
+                    }
+                } header: {
+                    Text("Favorites")
+                        .foregroundStyle(isFavoritesDropTargeted ? Color.accentColor : Color.secondary)
+                }
+                Section("Locations") {
+                    ForEach(locationEntries) { entry in
+                        sidebarRow(entry)
+                            .contextMenu {
+                                Button("Add to Favorites", systemImage: "star") {
+                                    viewModel.addSidebarFavorites([entry.node.url])
+                                }
+                            }
+                    }
                 }
             }
             .listStyle(.sidebar)
+            .dropDestination(for: URL.self) { urls, _ in
+                viewModel.addSidebarFavorites(urls)
+            } isTargeted: { targeted in
+                isFavoritesDropTargeted = targeted
+            }
             .onKeyPress(.rightArrow) {
                 viewModel.moveInSidebar(expanding: true) ? .handled : .ignored
             }
@@ -77,7 +139,7 @@ private struct SidebarNodeRow: View {
                 Button(action: onToggle) {
                     Image(systemName: node.isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white)
                         .frame(width: 16, height: 22)
                         .contentShape(Rectangle())
                 }

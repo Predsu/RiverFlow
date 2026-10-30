@@ -20,6 +20,12 @@ class FolderViewModel {
     var files: [FileItem] = []
     var currentSortingOption: FileSortOption = .name
     var sidebarRoots: [SidebarNode] = []
+    private(set) var favoriteSidebarRoots: [SidebarNode] = []
+    private let sidebarDefaults: UserDefaults
+    private static let sidebarFavoritesKey = "sidebarFavoriteDirectoryPaths"
+
+    private var allSidebarRoots: [SidebarNode] { favoriteSidebarRoots + sidebarRoots }
+
     var selectedSidebarNodeID: UUID?
     var sidebarRevealRevision = 0
     private var preferredSidebarRootID: UUID?
@@ -31,7 +37,7 @@ class FolderViewModel {
             guard node.isExpanded else { return [row] }
             return [row] + node.children.flatMap { entries(for: $0, rootID: rootID, depth: depth + 1) }
         }
-        return sidebarRoots.flatMap { entries(for: $0, rootID: $0.id, depth: 0) }
+        return allSidebarRoots.flatMap { entries(for: $0, rootID: $0.id, depth: 0) }
     }
     
     var editingFileID: UUID? = nil
@@ -116,7 +122,14 @@ class FolderViewModel {
         sortedFiles.filter { selectedFileIds.contains($0.id) }
     }
     
-    init(startDir: URL = URL(fileURLWithPath: PathAutocompleteService.userHomeDirectory), sidebarRoots: [SidebarNode]? = nil) {
+    init(startDir: URL = URL(fileURLWithPath: PathAutocompleteService.userHomeDirectory), sidebarRoots: [SidebarNode]? = nil, sidebarDefaults: UserDefaults = .standard) {
+        self.sidebarDefaults = sidebarDefaults
+        var restoredPaths = Set<String>()
+        self.favoriteSidebarRoots = (sidebarDefaults.stringArray(forKey: Self.sidebarFavoritesKey) ?? []).compactMap { path in
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            guard restoredPaths.insert(url.path).inserted else { return nil }
+            return Self.favoriteNode(for: url)
+        }
         self.currentDir = startDir
         self.sidebarRoots = sidebarRoots ?? SideBarItem.allCases.map { item in
             SidebarNode(name: item.rawValue, url: item.url, iconName: item.iconName, isRoot: true)
@@ -124,6 +137,44 @@ class FolderViewModel {
         loadCurrentDirectory()
     }
     
+    private static func favoriteNode(for url: URL) -> SidebarNode {
+        SidebarNode(name: url.path == "/" ? "/" : url.lastPathComponent,
+                    url: url, iconName: "folder", isRoot: true)
+    }
+
+    /// Adds shortcuts only; dropping a directory never moves its contents.
+    @discardableResult
+    func addSidebarFavorites(_ urls: [URL]) -> Bool {
+        var accepted = false
+        var changed = false
+        for url in urls where url.isFileURL {
+            let normalized = url.standardizedFileURL
+            guard let values = try? normalized.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey]),
+                  values.isDirectory == true, values.isPackage != true else { continue }
+            accepted = true
+            guard !favoriteSidebarRoots.contains(where: { $0.url == normalized }) else { continue }
+            favoriteSidebarRoots.append(Self.favoriteNode(for: normalized))
+            changed = true
+        }
+        if changed { saveSidebarFavorites() }
+        return accepted
+    }
+
+    func removeSidebarFavorite(_ node: SidebarNode) {
+        guard favoriteSidebarRoots.contains(where: { $0.id == node.id }) else { return }
+        let removedSelection = visibleSidebarEntries.contains {
+            $0.id == selectedSidebarNodeID && $0.rootID == node.id
+        }
+        favoriteSidebarRoots.removeAll { $0.id == node.id }
+        saveSidebarFavorites()
+        if preferredSidebarRootID == node.id { preferredSidebarRootID = nil }
+        if removedSelection { expandToURL(currentDir) }
+    }
+
+    private func saveSidebarFavorites() {
+        sidebarDefaults.set(favoriteSidebarRoots.map { $0.url.path }, forKey: Self.sidebarFavoritesKey)
+    }
+
     private static let userContentFolderNames: Set<String> = [
         "desktop", "documents", "downloads", "pictures", "movies", "music", "public"
     ]
@@ -388,7 +439,7 @@ class FolderViewModel {
     
     /// Reloads the loaded folders in the sidebar tree.
     func reloadSidebarTree() {
-        for root in sidebarRoots {
+        for root in allSidebarRoots {
             if root.isExpanded {
                 root.reloadChildren(showHidden: showHiddenFiles)
             } else {
@@ -402,16 +453,16 @@ class FolderViewModel {
     func expandToURL(_ targetURL: URL) {
         let target = targetURL.standardizedFileURL
         lastSidebarDirectory = target
-        let candidates = sidebarRoots.filter { SidebarNode.contains(target, in: $0.url) }
+        let candidates = allSidebarRoots.filter { SidebarNode.contains(target, in: $0.url) }
         let root = candidates.first { $0.id == preferredSidebarRootID }
             ?? candidates.max { $0.url.pathComponents.count < $1.url.pathComponents.count }
         if root?.id != preferredSidebarRootID {
             preferredSidebarRootID = nil
         }
-        for root in sidebarRoots {
+        for root in allSidebarRoots {
             root.collapseOutsidePath(to: target)
         }
-        for other in sidebarRoots where other.id != root?.id {
+        for other in allSidebarRoots where other.id != root?.id {
             other.collapse()
         }
         selectedSidebarNodeID = nil
@@ -454,7 +505,7 @@ class FolderViewModel {
     }
 
     func collapseSidebar() {
-        sidebarRoots.forEach { $0.collapse() }
+        allSidebarRoots.forEach { $0.collapse() }
     }
 
     /// Match outline navigation while keeping disclosure independent of opening a folder.
