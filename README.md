@@ -7,6 +7,7 @@
 ![Version](https://img.shields.io/badge/Version-v0.1.1-yellow)
 ![Platform](https://img.shields.io/badge/Platform-macOS%2014.0+-black?logo=apple)
 ![Architecture](https://img.shields.io/badge/Architecture-Universal%20(Apple%20Silicon/Intel)-blue)
+![RiverFlow Coding Time](https://toriyukari.neocities.org/badges/riverflow-time.svg)
 ![License](https://img.shields.io/badge/License-RKNCSL%201.1-green)
 [![codecov](https://codecov.io/github/Predsu/RiverFlow/branch/main/graph/badge.svg)](https://codecov.io/github/Predsu/RiverFlow)
 <img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/w/Predsu/RiverFlow">
