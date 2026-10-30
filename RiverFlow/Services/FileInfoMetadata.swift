@@ -55,8 +55,8 @@ struct FileInfoMetadata: Sendable {
             .init(title: "Identity", symbol: "doc.text", fields: [
                 .init(label: "Kind", value: info.kind),
                 .init(label: "Location", value: url.deletingLastPathComponent().path),
-                .init(label: "Hidden", value: values.isHidden == true ? "Yes" : "No"),
-                .init(label: "Package", value: values.isPackage == true ? "Yes" : "No")
+                .init(label: "Hidden", value: values.isHidden.map { $0 ? "Yes" : "No" } ?? "Unavailable"),
+                .init(label: "Package", value: values.isPackage.map { $0 ? "Yes" : "No" } ?? "Unavailable")
             ]),
             .init(title: "Storage", symbol: "internaldrive", fields: storage,
                   note: isDirectory ? "Folder totals are calculated separately." : "On-disk allocation can differ from file size due to compression, sparse data, and filesystem sharing."),

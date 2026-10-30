@@ -11,6 +11,7 @@ struct FileInfoView: View {
 
     @State private var selection: Tab = .general
     @State private var metadata: FileInfoMetadata?
+    @State private var metadataDate: Date?
     @State private var folderSummary: FileInfoFolderSummary?
     @State private var errorMessage: String?
 
@@ -57,7 +58,7 @@ struct FileInfoView: View {
             Divider()
             HStack(spacing: 5) {
                 Image(systemName: "clock")
-                Text("State for: " + Date().formatted(date: .complete, time: .complete))
+                Text("State for: " + (metadataDate ?? Date()).formatted(date: .complete, time: .complete))
                 Spacer()
             }
             .font(.system(size: 10))
@@ -173,6 +174,7 @@ struct FileInfoView: View {
             } onCancel: { read.cancel() }
             guard !Task.isCancelled else { return }
             metadata = snapshot
+            metadataDate = Date()
             if file.itemType == .DIRECTORY, snapshot.kind != "Symbolic link" {
                 let scan = Task.detached(priority: .utility) { FileInfoFolderSummary.read(at: url) }
                 let summary = await withTaskCancellationHandler {
