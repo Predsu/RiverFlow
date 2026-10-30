@@ -4,7 +4,7 @@
 
 <em>Transforming file management for developers</em>
 
-![Version](https://img.shields.io/badge/Version-none-red)
+![Version](https://img.shields.io/badge/Version-v0.1.1-yellow)
 ![Platform](https://img.shields.io/badge/Platform-macOS%2014.0+-black?logo=apple)
 ![Architecture](https://img.shields.io/badge/Architecture-Universal%20(Apple%20Silicon/Intel)-blue)
 ![License](https://img.shields.io/badge/License-RKNCSL%201.1-green)
@@ -19,7 +19,7 @@ RiverFlow is an experimental native file manager designed for developers and adv
 
 Its goal is to provide a customizable alternative to other file managers with developer-oriented actions, familiar file-management controls and a fully native macOS interface. RiverFlow is written in Swift using SwiftUI and AppKit, without depending on a cross-platform UI framework.
 
-The project is targeted to work with macOS 14 or higher and Apple Sillicon as well as Intel-based devices (however in restricted mode it can run on macOS 12 or higher with decreased functionalities).
+The project is targeted to work with macOS 14 or higher and Apple Sillicon as well as Intel-based devices.
 
 </div>
 
