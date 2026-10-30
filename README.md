@@ -1,4 +1,3 @@
-<img width="2940" height="1912" alt="Nagranie z ekranu 2026-10-29 o 17 20 59" src="https://github.com/user-attachments/assets/e9729623-ae72-48a3-b8b2-d2781f112eeb" />
 <div align="center">
 
 # RIVERFLOW
