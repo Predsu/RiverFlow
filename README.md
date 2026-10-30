@@ -517,7 +517,7 @@ Contributing guidelines are under construction.
 
 </details>
 
-<details closed><img width="2940" height="1912" alt="Nagranie z ekranu 2026-10-29 o 17 20 59" src="https://github.com/user-attachments/assets/b5bb7048-1d74-4f9a-88eb-51825f79c180" />
+<details closed>
 
 <summary>Contributor Graph</summary>
 <br>
