@@ -166,6 +166,10 @@ class SidebarNode: Identifiable, Hashable {
         }
     }
 
+    func containsNode(withID nodeID: UUID) -> Bool {
+        id == nodeID || children.contains { $0.containsNode(withID: nodeID) }
+    }
+
     static func contains(_ target: URL, in directory: URL) -> Bool {
         let parent = directory.standardizedFileURL.pathComponents
         let child = target.standardizedFileURL.pathComponents
