@@ -1,3 +1,4 @@
+<img width="2940" height="1912" alt="Nagranie z ekranu 2026-10-29 o 17 20 59" src="https://github.com/user-attachments/assets/e9729623-ae72-48a3-b8b2-d2781f112eeb" />
 <div align="center">
 
 # RIVERFLOW
@@ -69,10 +70,10 @@ Native macOS experience
 
 ## Screenshots
 
-<img width="1059" height="672" alt="Preview1" src="https://github.com/user-attachments/assets/227a3e36-d2bc-4c49-bdaf-222f8cbeeef6" />
-<img width="1059" height="701" alt="Preview2" src="https://github.com/user-attachments/assets/f76f5b21-0b5b-46a9-89d5-e11efa689727" />
-<img width="1059" height="672" alt="Preview3" src="https://github.com/user-attachments/assets/4bc9b94d-741f-4950-a0c6-514a5101d810" />
-<img width="1059" height="672" alt="Preview4" src="https://github.com/user-attachments/assets/fcc5954c-b4a6-44c8-a715-c2e84e2167b6" />
+<img width="1470" height="956" alt="Preview1" src="https://github.com/user-attachments/assets/f9c693e6-7acc-4cc8-8623-dd48af70343d" />
+<img width="1470" height="956" alt="Preview2" src="https://github.com/user-attachments/assets/d169c6ec-bcaf-42ea-afd8-3cb20c1737ac" />
+<img width="1470" height="956" alt="Preview3" src="https://github.com/user-attachments/assets/ffd7e843-4ed8-43ae-9b8d-88f6cb48b93c" />
+<img width="1470" height="956" alt="QuickLookPreview" src="https://github.com/user-attachments/assets/5a37e0e7-0884-4162-90ef-d85252e27358" />
 
 ---
 
@@ -517,7 +518,8 @@ Contributing guidelines are under construction.
 
 </details>
 
-<details closed>
+<details closed><img width="2940" height="1912" alt="Nagranie z ekranu 2026-10-29 o 17 20 59" src="https://github.com/user-attachments/assets/b5bb7048-1d74-4f9a-88eb-51825f79c180" />
+
 <summary>Contributor Graph</summary>
 <br>
 <p align="left">
