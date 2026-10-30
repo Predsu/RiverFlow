@@ -18,6 +18,7 @@ struct SidebarView: View {
         SidebarNodeRow(
             node: entry.node,
             depth: entry.depth,
+            isSelected: viewModel.selectedSidebarNodeID == entry.id,
             showHiddenFiles: viewModel.showHiddenFiles,
             onToggle: { viewModel.toggleSidebarNode(entry.node) }
         )
@@ -130,6 +131,7 @@ struct SidebarView: View {
 private struct SidebarNodeRow: View {
     let node: SidebarNode
     let depth: Int
+    let isSelected: Bool
     let showHiddenFiles: Bool
     let onToggle: () -> Void
 
@@ -139,7 +141,7 @@ private struct SidebarNodeRow: View {
                 Button(action: onToggle) {
                     Image(systemName: node.isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(isSelected ? Color.white : Color.secondary)
                         .frame(width: 16, height: 22)
                         .contentShape(Rectangle())
                 }
