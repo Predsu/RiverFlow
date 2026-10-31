@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// A compact metadata inspector with a persistent identity header and three focused tabs.
 struct FileInfoView: View {
     let file: FileItem
     weak var window: NSWindow?
@@ -14,6 +15,8 @@ struct FileInfoView: View {
     @State private var metadataDate: Date?
     @State private var folderSummary: FileInfoFolderSummary?
     @State private var errorMessage: String?
+    @State private var showingIconPicker = false
+    @State private var metadataRevision = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,7 +71,10 @@ struct FileInfoView: View {
         }
         .background(Color(NSColor.windowBackgroundColor))
         .frame(minWidth: 360, idealWidth: 400, minHeight: 420, idealHeight: 640)
-        .task(id: file.url) { await loadMetadata() }
+        .task(id: metadataRevision) { await loadMetadata() }
+        .sheet(isPresented: $showingIconPicker) {
+            FileIconPickerView(file: file) { metadataRevision += 1 }
+        }
         .onKeyPress(.escape) {
             window?.performClose(nil)
             return .handled
@@ -77,7 +83,19 @@ struct FileInfoView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 14) {
-            FileIconView(file: file, baseSize: 48)
+            Button { showingIconPicker = true } label: {
+                FileIconView(file: file, baseSize: 48)
+                    .padding(6)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.system(size: 14))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, Color.accentColor)
+                    }
+            }
+            .buttonStyle(.plain)
+            .help("Change icon")
+            .accessibilityLabel("Change icon for \(file.name)")
             VStack(alignment: .leading, spacing: 5) {
                 Text(file.name)
                     .font(.system(size: 15, weight: .semibold))
@@ -166,6 +184,7 @@ struct FileInfoView: View {
 
     @MainActor
     private func loadMetadata() async {
+        errorMessage = nil
         let url = file.url
         let read = Task.detached(priority: .userInitiated) { try FileInfoMetadata.read(at: url) }
         do {
