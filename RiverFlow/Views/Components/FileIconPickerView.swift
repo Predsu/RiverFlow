@@ -13,9 +13,10 @@ struct FileIconPickerView: View {
     @State private var symbolImage: NSImage?
     @State private var errorMessage: String?
     @State private var hasCustomIcon = false
+    @State private var materialIcon: NSImage?
 
     private enum Source: String, CaseIterable, Identifiable {
-        case symbols = "SF Symbols", image = "Image"
+        case symbols = "SF Symbols", material = "Material", image = "Image"
         var id: Self { self }
     }
 
@@ -36,24 +37,87 @@ struct FileIconPickerView: View {
         }
     }
 
-    // Public SF Symbol names only. An exact name can also be entered for any installed symbol.
     private static let symbols = [
-        "folder.fill", "folder.badge.gearshape", "folder.badge.person.crop", "doc.fill", "doc.text.fill",
-        "doc.richtext", "doc.badge.gearshape", "books.vertical.fill", "book.closed.fill", "bookmark.fill",
-        "archivebox.fill", "tray.fill", "externaldrive.fill", "internaldrive.fill", "opticaldisc.fill",
-        "star.fill", "heart.fill", "flag.fill", "tag.fill", "pin.fill",
-        "house.fill", "building.2.fill", "briefcase.fill", "backpack.fill", "graduationcap.fill",
-        "hammer.fill", "wrench.and.screwdriver.fill", "gearshape.fill", "terminal.fill", "curlybraces",
-        "chevron.left.forwardslash.chevron.right", "shippingbox.fill", "cube.fill", "puzzlepiece.fill", "app.fill",
-        "photo.fill", "photo.on.rectangle.angled", "camera.fill", "paintpalette.fill", "paintbrush.fill",
-        "pencil.and.outline", "scissors", "film.fill", "play.rectangle.fill", "music.note",
-        "headphones", "waveform", "mic.fill", "speaker.wave.2.fill", "gamecontroller.fill",
-        "globe", "network", "cloud.fill", "server.rack", "antenna.radiowaves.left.and.right",
-        "lock.fill", "key.fill", "checkmark.shield.fill", "eye.fill", "checkmark.seal.fill",
-        "bolt.fill", "flame.fill", "sparkles", "lightbulb.fill", "sun.max.fill",
-        "moon.fill", "leaf.fill", "tree.fill", "pawprint.fill", "mountain.2.fill",
-        "calendar", "clock.fill", "chart.bar.fill", "chart.pie.fill", "list.bullet.rectangle",
-        "envelope.fill", "bubble.left.and.bubble.right.fill", "person.2.fill", "gift.fill", "airplane"
+        "folder.fill",
+        "folder.badge.gearshape",
+        "folder.badge.person.crop",
+        "doc.fill",
+        "doc.text.fill",
+        "doc.richtext",
+        "doc.badge.gearshape",
+        "books.vertical.fill",
+        "book.closed.fill",
+        "bookmark.fill",
+        "archivebox.fill",
+        "tray.fill",
+        "externaldrive.fill",
+        "internaldrive.fill",
+        "opticaldisc.fill",
+        "star.fill",
+        "heart.fill",
+        "flag.fill",
+        "tag.fill",
+        "pin.fill",
+        "house.fill",
+        "building.2.fill",
+        "briefcase.fill",
+        "backpack.fill",
+        "graduationcap.fill",
+        "hammer.fill",
+        "wrench.and.screwdriver.fill",
+        "gearshape.fill",
+        "terminal.fill",
+        "curlybraces",
+        "chevron.left.forwardslash.chevron.right",
+        "shippingbox.fill",
+        "cube.fill",
+        "puzzlepiece.fill",
+        "app.fill",
+        "photo.fill",
+        "photo.on.rectangle.angled",
+        "camera.fill",
+        "paintpalette.fill",
+        "paintbrush.fill",
+        "pencil.and.outline",
+        "scissors",
+        "film.fill",
+        "play.rectangle.fill",
+        "music.note",
+        "headphones",
+        "waveform",
+        "mic.fill",
+        "speaker.wave.2.fill",
+        "gamecontroller.fill",
+        "globe",
+        "network",
+        "cloud.fill",
+        "server.rack",
+        "antenna.radiowaves.left.and.right",
+        "lock.fill",
+        "key.fill",
+        "checkmark.shield.fill",
+        "eye.fill",
+        "checkmark.seal.fill",
+        "bolt.fill",
+        "flame.fill",
+        "sparkles",
+        "lightbulb.fill",
+        "sun.max.fill",
+        "moon.fill",
+        "leaf.fill",
+        "tree.fill",
+        "pawprint.fill",
+        "mountain.2.fill",
+        "calendar",
+        "clock.fill",
+        "chart.bar.fill",
+        "chart.pie.fill",
+        "list.bullet.rectangle",
+        "envelope.fill", 
+        "bubble.left.and.bubble.right.fill",
+        "person.2.fill",
+        "gift.fill",
+        "airplane"
     ]
 
     private var filteredSymbols: [String] {
@@ -66,7 +130,11 @@ struct FileIconPickerView: View {
     }
 
     private var proposedIcon: NSImage? {
-        source == .symbols ? symbolImage : image
+        switch source {
+        case .symbols: return symbolImage
+        case .material: return materialIcon
+        case .image: return image
+        }
     }
 
     var body: some View {
@@ -92,7 +160,11 @@ struct FileIconPickerView: View {
             Divider()
 
             Group {
-                if source == .symbols { symbolBrowser } else { imageChooser }
+                switch source {
+                case .symbols: symbolBrowser
+                case .material: MaterialIconBrowserView { materialIcon = $0 }
+                case .image: imageChooser
+                }
             }
             .frame(height: 310)
 
