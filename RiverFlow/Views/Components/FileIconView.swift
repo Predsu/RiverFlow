@@ -149,7 +149,7 @@ struct FileIconView: View {
         .onAppear { refreshCustomIcon() }
         .onReceive(NotificationCenter.default.publisher(for: FileCustomIconService.didChange)) { notification in
             guard let url = notification.object as? URL,
-                  url.standardizedFileURL == file.url.standardizedFileURL else { return }
+                  url.resolvingSymlinksInPath().standardizedFileURL == file.url.resolvingSymlinksInPath().standardizedFileURL else { return }
             refreshCustomIcon()
         }
         .onChange(of: file.url) { _, _ in

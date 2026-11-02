@@ -37,6 +37,7 @@ enum IconPackImporter {
     static let projectURL = URL(string: "https://github.com/material-extensions/vscode-material-icon-theme")!
     static let maximumIcons = 3000
     private static let maximumFileSize = 2 * 1024 * 1024
+    private static let maximumNoticesSize = 8 * 1024 * 1024
 
     static func prepare(_ selection: URL) throws -> PreparedIconPack {
         let manager = FileManager.default
@@ -68,10 +69,18 @@ enum IconPackImporter {
         let rootItems = try manager.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey])
         let licenseFiles = rootItems.filter {
             let name = $0.lastPathComponent.lowercased()
-            return ["license", "licence", "copying", "notice"].contains($0.deletingPathExtension().lastPathComponent.lowercased())
+            return ["license", "licence", "copying", "notice", "credit", "credits", "author", "authors"].contains($0.deletingPathExtension().lastPathComponent.lowercased())
                 || ["license-material-icon-theme.txt", "thirdpartynotices.txt"].contains(name)
         }.sorted { $0.lastPathComponent < $1.lastPathComponent }
         guard !licenseFiles.isEmpty else { throw invalid("No license file was found. Choose the complete downloaded pack, including its LICENSE file, instead of only the icons folder.") }
+        var noticesSize = 0
+        for url in licenseFiles {
+            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? Int.max
+            guard size >= 0, size <= maximumNoticesSize - noticesSize else {
+                throw invalid("This pack contains too much license and credit text. Choose a pack with at most 8 MB of notices.")
+            }
+            noticesSize += size
+        }
         let notices = try licenseFiles.map { url in "\(url.lastPathComponent)\n\n" + (try readText(url)) }.joined(separator: "\n\n———\n\n")
         let metadataURL = root.appendingPathComponent("package.json")
         var metadata: [String: Any] = [:]
@@ -102,7 +111,13 @@ enum IconPackImporter {
             let data: Data
             do {
                 data = try readFile(url)
-                if url.pathExtension.lowercased() == "svg" { try validateSVG(data) }
+                if url.pathExtension.lowercased() == "svg" {
+                    try validateSVG(data)
+                } else {
+                    guard let image = NSImage(data: data), image.isValid else {
+                        throw invalid("An icon in this pack contains invalid image data.")
+                    }
+                }
             } catch { skipped += 1; continue }
             totalBytes += data.count
             guard totalBytes <= 128 * 1024 * 1024 else { throw invalid("This pack contains too much image data. Choose a smaller pack.") }
@@ -110,12 +125,11 @@ enum IconPackImporter {
             guard !identifier.isEmpty, !identifier.hasPrefix("."), used.insert(identifier).inserted else { skipped += 1; continue }
             let filename = UUID().uuidString + "." + url.pathExtension.lowercased()
             try data.write(to: iconDirectory.appendingPathComponent(filename), options: .atomic)
-            icons.append(.init(id: identifier, category: identifier.hasPrefix("folder-") ? "Folders" : "Files", filename: filename))
+            icons.append(.init(id: identifier, category: identifier == "folder" || identifier.hasPrefix("folder-") ? "Folders" : "Files", filename: filename))
         }
         guard !icons.isEmpty else { throw invalid("No supported icons were found. Download the complete Material Icon Theme ZIP and choose it here.") }
         let pack = ImportedIconPack(id: UUID(), name: String(name.prefix(120)), version: version.map { String($0.prefix(50)) }, source: sourceLink, notices: notices, icons: icons)
         try JSONEncoder().encode(pack).write(to: output.appendingPathComponent("pack.json"), options: .atomic)
-        // Preserve the original license documents as well as the readable combined notices.
         for (index, license) in licenseFiles.enumerated() {
             try readFile(license).write(to: output.appendingPathComponent("license-\(index).txt"))
         }
@@ -280,7 +294,7 @@ final class ImportedIconPackStore: ObservableObject {
         let previous = pack
         pack = nil
         cache.removeAllObjects()
-        if let previous { try? FileManager.default.removeItem(at: root.appendingPathComponent(previous.id.uuidString)) }
+        if let previous { try FileManager.default.removeItem(at: root.appendingPathComponent(previous.id.uuidString)) }
     }
 
     func image(for icon: ImportedIconPack.Icon) -> NSImage? {

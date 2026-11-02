@@ -72,6 +72,90 @@ import Testing
         #expect(fromZIP.pack.notices == fromParent.pack.notices)
     }
 
+    @Test("Credit and author documents are preserved")
+    func creditAndAuthorDocumentsArePreserved() throws {
+        let folder = try fixture()
+        let storage = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder); try? FileManager.default.removeItem(at: storage) }
+        let documents = ["CREDITS.md": "Artwork by Example Artist", "AUTHORS": "Example Contributor"]
+        for (filename, text) in documents {
+            try Data(text.utf8).write(to: folder.appendingPathComponent(filename))
+        }
+        let prepared = try IconPackImporter.prepare(folder)
+        defer { prepared.discard() }
+        let store = ImportedIconPackStore(root: storage)
+        try store.install(prepared)
+        let saved = try #require(ImportedIconPackStore(root: storage).pack)
+        for (filename, text) in documents {
+            #expect(saved.notices.contains("\(filename)\n\n\(text)"))
+        }
+        let savedDirectory = storage.appendingPathComponent(saved.id.uuidString)
+        let copies = try FileManager.default.contentsOfDirectory(at: savedDirectory, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("license-") }
+        let copiedTexts = try copies.map { try String(contentsOf: $0, encoding: .utf8) }
+        for text in documents.values { #expect(copiedTexts.contains(text)) }
+    }
+
+    @Test("The combined notice limit applies even when every document is within the per-file limit")
+    func combinedNoticeLimitAppliesEvenWhenEveryDocumentIsWithinPerFileLimit() throws {
+        let folder = try fixture()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let document = Data(repeating: 65, count: 2 * 1024 * 1024)
+        for filename in ["LICENSE", "NOTICE", "COPYING", "CREDITS.md"] {
+            try document.write(to: folder.appendingPathComponent(filename))
+        }
+        let accepted = try IconPackImporter.prepare(folder)
+        defer { accepted.discard() }
+        #expect(accepted.pack.notices.contains("CREDITS.md"))
+        try Data("Contributor".utf8).write(to: folder.appendingPathComponent("AUTHORS"))
+        #expect(throws: IconPackImportError.self) { try IconPackImporter.prepare(folder) }
+    }
+
+    @Test("Invalid non-SVG images are skipped and folders are categorized")
+    func invalidNonSVGImagesAreSkippedAndFoldersAreCategorized() throws {
+        let folder = try fixture()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        for fileExtension in ["png", "pdf", "jpg", "jpeg", "tiff", "icns"] {
+            try Data("Invalid image".utf8).write(to: folder.appendingPathComponent("icons/broken.\(fileExtension)"))
+        }
+        let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1, pixelsHigh: 1,
+                                                  bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                                  isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        bitmap.setColor(.systemBlue, atX: 0, y: 0)
+        let png = try #require(bitmap.representation(using: .png, properties: [:]))
+        try png.write(to: folder.appendingPathComponent("icons/valid.png"))
+        for identifier in ["folder", "folderish"] {
+            try Data(svg.utf8).write(to: folder.appendingPathComponent("icons/\(identifier).svg"))
+        }
+        let prepared = try IconPackImporter.prepare(folder)
+        defer { prepared.discard() }
+        #expect(prepared.skipped == 6)
+        #expect(prepared.pack.icons.count == 5)
+        #expect(prepared.pack.icons.contains { $0.id == "valid" })
+        #expect(!prepared.pack.icons.contains { $0.id == "broken" })
+        for icon in prepared.pack.icons {
+            #expect(icon.category == (["folder", "folder-sample"].contains(icon.id) ? "Folders" : "Files"))
+        }
+        let savedIcons = try FileManager.default.contentsOfDirectory(at: prepared.directory.appendingPathComponent("pack/icons"), includingPropertiesForKeys: nil)
+        #expect(savedIcons.count == 5)
+    }
+
+    @Test("Pack deletion errors propagate after the active pointer and in-memory state are cleared")
+    func packDeletionErrorsPropagateAfterTheActivePointerAndInMemoryStateAreCleaned() throws {
+        let folder = try fixture()
+        let storage = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder); try? FileManager.default.removeItem(at: storage) }
+        let prepared = try IconPackImporter.prepare(folder)
+        defer { prepared.discard() }
+        let store = ImportedIconPackStore(root: storage)
+        try store.install(prepared)
+        try FileManager.default.removeItem(at: storage.appendingPathComponent(prepared.pack.id.uuidString))
+        #expect(throws: (any Error).self) { try store.remove() }
+        #expect(store.pack == nil)
+        #expect(!FileManager.default.fileExists(atPath: storage.appendingPathComponent("active.json").path))
+        #expect(ImportedIconPackStore(root: storage).pack == nil)
+    }
+
     @Test("ZIP path traversal is rejected before extraction")
     func ZIPPathTraversalIsRejectedBeforeExtraction() throws {
         let folder = try fixture()

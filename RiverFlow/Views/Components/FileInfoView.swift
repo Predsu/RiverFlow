@@ -185,6 +185,8 @@ struct FileInfoView: View {
     @MainActor
     private func loadMetadata() async {
         errorMessage = nil
+        metadata = nil
+        folderSummary = nil
         let url = file.url
         let read = Task.detached(priority: .userInitiated) { try FileInfoMetadata.read(at: url) }
         do {
