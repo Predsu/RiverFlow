@@ -94,7 +94,7 @@ struct ContentView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var viewModel = FolderViewModel()
     @State private var selectedFileViewStyle: FileViewStyle = .grid
-    @SceneStorage("isFilePreviewPresented") private var isFilePreviewPresented = true
+    @State private var isFilePreviewPresented = false
     @State private var refreshTrigger = 0
     @State private var goUpTrigger = 0
     @State private var lastAnchorFileId: UUID?

@@ -546,3 +546,5 @@ AI has not took part in planning the development of the app, every feature has b
 ## Acknowledgements
 
 RiverFlow is part of **The Shrimple Project**, a set of lightweight, native QoL macOS apps. More about the project [here](https://toriyukari.neocities.org/tsc)
+
+Material Icon Theme artwork is not bundled with RiverFlow despite it being recommended icon provider. Users can optionally import an icon pack from the [official Material Icon Theme repository](https://github.com/material-extensions/vscode-material-icon-theme). Imported packs retain their original licenses and credits.

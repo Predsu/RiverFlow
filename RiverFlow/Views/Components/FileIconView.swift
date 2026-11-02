@@ -12,6 +12,7 @@ struct FileIconView: View {
     let file: FileItem
     var baseSize: CGFloat = 64
     
+    @State private var customIcon: NSImage?
     @State private var loadedThumbnail: NSImage? = nil
     @State private var hasAttemptedLoad: Bool = false
     
@@ -87,7 +88,12 @@ struct FileIconView: View {
     
     var body: some View {
         Group {
-            if isAppBundle {
+            if let customIcon {
+                Image(nsImage: customIcon)
+                    .resizable()
+                    .scaledToFit()
+                    .opacity(file.isHidden ? 0.5 : 1.0)
+            } else if isAppBundle {
                 Image(nsImage: appIcon)
                     .resizable()
                     .scaledToFit()
@@ -140,7 +146,14 @@ struct FileIconView: View {
             }
         }
         .frame(width: baseSize, height: baseSize)
+        .onAppear { refreshCustomIcon() }
+        .onReceive(NotificationCenter.default.publisher(for: FileCustomIconService.didChange)) { notification in
+            guard let url = notification.object as? URL,
+                  url.resolvingSymlinksInPath().standardizedFileURL == file.url.resolvingSymlinksInPath().standardizedFileURL else { return }
+            refreshCustomIcon()
+        }
         .onChange(of: file.url) { _, _ in
+            refreshCustomIcon()
             loadedThumbnail = nil
             hasAttemptedLoad = false
             if isImageFile {
@@ -149,6 +162,11 @@ struct FileIconView: View {
         }
     }
     
+    private func refreshCustomIcon() {
+        customIcon = FileCustomIconService.hasCustomIcon(at: file.url)
+            ? NSWorkspace.shared.icon(forFile: file.url.path) : nil
+    }
+
     /// Triggers asynchronous thumbnail generation for FileItem.
     private func loadThumbnailImage() {
         guard !hasAttemptedLoad else { return }
