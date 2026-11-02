@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// AppKit window manager responsible for displaying file info windows.
-///
+/// 
 /// Maintains lifecycle of windows, handles duplication attempts and removing windows.
 class FileWindowManager: NSObject, NSWindowDelegate {
     static let shared = FileWindowManager()
@@ -26,15 +26,17 @@ class FileWindowManager: NSObject, NSWindowDelegate {
             contentRect: NSRect(
                 x: 0,
                 y: 0,
-                width: 380,
-                height: 260),
-            styleMask: [.titled, .closable, .miniaturizable],
+                width: 400,
+                height: 640),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         
         window.identifier = NSUserInterfaceItemIdentifier(windowIdentifier)
-        window.title = file.name
+        window.title = "Info — \(file.name)"
+        window.contentMinSize = NSSize(width: 360, height: 420)
+        window.delegate = self
         window.center()
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: FileInfoView(file: file, window: window))
@@ -43,7 +45,6 @@ class FileWindowManager: NSObject, NSWindowDelegate {
         openWindows[windowIdentifier] = window
     }
     
-    /// Handles window closure to clean up tracking references.
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow,
             let id = window.identifier?.rawValue else { return }
