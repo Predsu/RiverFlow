@@ -490,10 +490,10 @@ Reviewers and users **do not need to compile demo of this project from source**.
 
 App demo is only Official Binary type that is available without any payments, it is a version meant to showcase the app's possibilities to any person reviewing or considering the purchase. It will be updated ocassionally, mostly before major updates but it's current state DOES NOT necessarily reflect the current state of the app's full version.
 
-**Current full version**: v0.1.0<br>
-**Current demo version**: v0.1.0<br>
+**Current full version**: v0.1.1<br>
+**Current demo version**: v0.1.1<br>
 **Is demo based on last full release**: *YES*<br>
-**Last version the demo is based on**: v0.1.0
+**Last version the demo is based on**: v0.1.1
 
 ### Overriding macOS Gatekeeper (Fixing the "Developer Cannot Be Verified" Error)
 
