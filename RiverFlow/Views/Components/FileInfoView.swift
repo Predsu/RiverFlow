@@ -58,16 +58,18 @@ struct FileInfoView: View {
             .id(selection)
             .background(Color(NSColor.textBackgroundColor).opacity(0.35))
 
-            Divider()
-            HStack(spacing: 5) {
-                Image(systemName: "clock")
-                Text("State for: " + (metadataDate ?? Date()).formatted(date: .complete, time: .complete))
-                Spacer()
+            if let metadataDate {
+                Divider()
+                HStack(spacing: 5) {
+                    Image(systemName: "clock")
+                    Text("State for: " + metadataDate.formatted(date: .complete, time: .complete))
+                    Spacer()
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
             }
-            .font(.system(size: 10))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
         }
         .background(Color(NSColor.windowBackgroundColor))
         .frame(minWidth: 360, idealWidth: 400, minHeight: 420, idealHeight: 640)
@@ -186,6 +188,7 @@ struct FileInfoView: View {
     private func loadMetadata() async {
         errorMessage = nil
         metadata = nil
+        metadataDate = nil
         folderSummary = nil
         let url = file.url
         let read = Task.detached(priority: .userInitiated) { try FileInfoMetadata.read(at: url) }
