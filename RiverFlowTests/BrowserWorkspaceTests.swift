@@ -19,7 +19,7 @@ struct BrowserWorkspaceTests {
     }
 
     @Test("Four panes keep navigation, search, selection and display settings independent")
-    func independentPanes() throws {
+    func fourPanesKeepNavigationSearchSelectionAndDisplaySettingsIndependent() throws {
         let root = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
         let workspace = workspace(at: root)
@@ -50,7 +50,7 @@ struct BrowserWorkspaceTests {
     }
 
     @Test("Layout reduction retains the active model and closing never removes the final pane")
-    func layoutLifecycle() throws {
+    func layoutReductionRetainsTheActiveModelAndClosingNeverRemovesTheFinalPane() throws {
         let root = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
         let workspace = workspace(at: root)
@@ -73,7 +73,7 @@ struct BrowserWorkspaceTests {
     }
 
     @Test("Adding, cycling, expanding and closing panes preserves existing state")
-    func paneControls() throws {
+    func addingCyclingExpandingAndClosingPanesPreservesExistingState() throws {
         let root = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
         let workspace = workspace(at: root)
@@ -98,7 +98,7 @@ struct BrowserWorkspaceTests {
     }
 
     @Test("Placement can split a specific pane before its existing content in a four-pane layout")
-    func placeFifthPane() throws {
+    func placementCanSplitSpecificPaneBeforeItsExistingContentInFourPaneLayout() throws {
         let root = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
         let workspace = workspace(at: root)
@@ -121,7 +121,7 @@ struct BrowserWorkspaceTests {
     }
 
     @Test("Directional splits and docking retain the original pane models")
-    func directionalSplitsAndDocking() throws {
+    func directionalSplitsAndDockingRetainTheOriginalPaneModels() throws {
         let root = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
         let workspace = workspace(at: root)
@@ -150,7 +150,7 @@ struct BrowserWorkspaceTests {
     }
 
     @Test("Presented dialogs keep pane commands attached to their owner")
-    func modalOwnership() throws {
+    func presentedDialogsKeepPaneCommandsAttachedToTheirOwner() throws {
         let root = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
         let workspace = workspace(at: root)
@@ -165,7 +165,7 @@ struct BrowserWorkspaceTests {
     }
 
     @Test("Copy and cut transfer between panes using the current clipboard")
-    func crossPaneClipboard() throws {
+    func copyAndCutTransferBetweenPanesUsingTheCurrentClipboard() throws {
         let root = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
         let clipboard = NSPasteboard.withUniqueName()
@@ -183,7 +183,6 @@ struct BrowserWorkspaceTests {
         #expect(!FileManager.default.fileExists(atPath: item.url.path))
         #expect(destination.files.contains { $0.name == "example.txt" })
         #expect(clipboard.readObjects(forClasses: [NSURL.self])?.isEmpty ?? true)
-        // A previous copying pane must use the new clipboard, not its old cache.
         let newItem = try #require(destination.files.first)
         destination.copyFiles(files: [newItem])
         source.navigateTo(url: root.appendingPathComponent("Fourth"))
@@ -196,7 +195,7 @@ struct BrowserWorkspaceTests {
     }
 
     @Test("Async navigation rejects stale reads and watchers preserve selection")
-    func asyncNavigationAndRefresh() async throws {
+    func asyncNavigationRejectsStaleReadsAndWatchersPreserveSelection() async throws {
         let root = try fixture()
         defer { try? FileManager.default.removeItem(at: root) }
         let model = FolderViewModel(startDir: root, sidebarRoots: [], loadsAsynchronously: true)
@@ -217,7 +216,7 @@ struct BrowserWorkspaceTests {
     }
 
     @Test("Path navigation lists current folder through root without duplicates")
-    func pathAncestors() {
+    func pathNavigationListsCurrentFolderThroughRootWithoutDuplicates() {
         #expect(InteractivePathTitleView.ancestorURLs(for: "/").map(\.path) == ["/"])
         #expect(InteractivePathTitleView.ancestorURLs(for: "/Users/example/Project").map(\.path) == [
             "/Users/example/Project", "/Users/example", "/Users", "/"
