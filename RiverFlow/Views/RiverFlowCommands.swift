@@ -50,6 +50,13 @@ struct RiverFlowCommands: Commands {
         
         CommandMenu("Pane") {
             if let workspace, !workspace.hasPresentedDialog {
+                Button("New Tab") { workspace.newTab(in: workspace.activePaneID) }
+                    .keyboardShortcut("t", modifiers: [.command, .option])
+                Button("Close Active Tab") {
+                    workspace.closeTab(workspace.activePane.selectedTabID, in: workspace.activePaneID)
+                }
+                .disabled(workspace.panes.count == 1 && workspace.activePane.tabs.count == 1)
+                Divider()
                 Button(workspace.isPlacingPane ? "Cancel Placement" : "Place New Pane…") {
                     if workspace.isPlacingPane {
                         workspace.isPlacingPane = false
@@ -69,10 +76,8 @@ struct RiverFlowCommands: Commands {
                         }
                     }
                 }
-                if workspace.panes.count > 1 {
-                    Button(workspace.showsPaneHeaders ? "Hide Pane Headers" : "Show Pane Headers") {
-                        workspace.showsPaneHeaders.toggle()
-                    }
+                Button(workspace.showsPaneHeaders ? "Hide Pane Headers" : "Show Pane Headers") {
+                    workspace.showsPaneHeaders.toggle()
                 }
                 Divider()
                 Button("Close Active Pane") { workspace.closePane(workspace.activePaneID) }

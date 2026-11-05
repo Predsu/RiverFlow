@@ -18,6 +18,28 @@ struct BrowserWorkspaceTests {
         BrowserWorkspace(startDir: root) { FolderViewModel(startDir: $0, sidebarRoots: []) }
     }
 
+    @Test("Hidden browsers defer directory work and refresh when shown")
+    func hiddenBrowserRefresh() async throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = FolderViewModel(startDir: root, sidebarRoots: [], loadsAsynchronously: true)
+        model.setBrowserVisible(false)
+        #expect(!model.isBrowserVisible)
+        #expect(!model.isLoadingDirectory)
+        let added = root.appendingPathComponent("added.txt")
+        try Data("new".utf8).write(to: added)
+        model.loadCurrentDirectory()
+        #expect(!model.isLoadingDirectory)
+        #expect(!model.files.contains { $0.url.standardizedFileURL == added.standardizedFileURL })
+        model.setBrowserVisible(true)
+        for _ in 0..<200 {
+            if model.files.contains(where: { $0.url.standardizedFileURL == added.standardizedFileURL }) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(model.files.contains { $0.url.standardizedFileURL == added.standardizedFileURL })
+        model.setBrowserVisible(false)
+    }
+
     @Test("Four panes keep navigation, search, selection and display settings independent")
     func fourPanesKeepNavigationSearchSelectionAndDisplaySettingsIndependent() throws {
         let root = try fixture()
@@ -118,6 +140,37 @@ struct BrowserWorkspaceTests {
             Issue.record("Expected a new pane above the selected lower-right pane")
             return
         }
+    }
+
+    @Test("Moving a tab into a pane and splitting it back out preserves its browser state")
+    func moveTabAndSplit() throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let workspace = workspace(at: root)
+        let first = workspace.activePane
+        workspace.newTab(in: first.id)
+        let tab = first.selectedTab
+        tab.viewModel.navigateTo(url: root.appendingPathComponent("Source"))
+        tab.viewStyle = .list
+        workspace.splitPane(first.id, vertically: false)
+        let second = workspace.activePane
+
+        #expect(workspace.moveTab(tab.id, to: second.id))
+        #expect(first.tabs.count == 1)
+        #expect(second.selectedTab === tab)
+        #expect(tab.viewModel.currentDir == root.appendingPathComponent("Source"))
+
+        #expect(workspace.moveTab(tab.id, to: second.id, split: TabSplit(vertical: true, before: true)))
+        #expect(workspace.panes.count == 3)
+        let detached = workspace.activePane
+        #expect(detached.selectedTab === tab)
+        #expect(detached.viewStyle == .list)
+
+        #expect(!workspace.moveTab(tab.id, to: detached.id, split: TabSplit(vertical: false, before: false)))
+        #expect(workspace.moveTab(tab.id, to: first.id))
+        #expect(workspace.panes.count == 2)
+        #expect(first.selectedTab === tab)
+        #expect(tab.viewModel.historyBackward.count == 1)
     }
 
     @Test("Directional splits and docking retain the original pane models")

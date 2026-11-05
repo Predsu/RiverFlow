@@ -20,6 +20,7 @@ class FolderViewModel {
     var files: [FileItem] = []
     private(set) var isLoadingDirectory = false
     private(set) var directoryLoadError: String?
+    @ObservationIgnored private(set) var isBrowserVisible = true
     private let loadsAsynchronously: Bool
     private let filePasteboard: NSPasteboard
     @ObservationIgnored private var directoryLoadID = UUID()
@@ -352,6 +353,7 @@ class FolderViewModel {
     
     /// Triggers search processing or clears previous search states based on the active search scope.
     private func performSearch() {
+        guard isBrowserVisible else { return }
         let queryText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         
         if searchScope == .thisMac && !queryText.isEmpty {
@@ -443,7 +445,8 @@ class FolderViewModel {
             a.name.localizedStandardCompare(b.name) == .orderedAscending
         }
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.metadataQuery === query else { return }
             self.globalSearchResults = stableResults
         }
     }
@@ -451,6 +454,7 @@ class FolderViewModel {
     /// UI panes read directory metadata off the main thread. Request IDs prevent
     /// slow reads from replacing a more recently navigated folder or filter.
     func loadCurrentDirectory() {
+        guard isBrowserVisible else { return }
         let directory = currentDir.standardizedFileURL
         let includeHidden = showHiddenFiles
         let requestID = UUID()
@@ -485,6 +489,28 @@ class FolderViewModel {
             directoryQueue.async(execute: work)
         } else {
             applyDirectory(Result { try Self.readDirectory(directory, showHidden: includeHidden) }, directory: directory)
+        }
+    }
+
+    /// Retain tab state, but stop live work while its browser is off screen.
+    func setBrowserVisible(_ visible: Bool) {
+        guard loadsAsynchronously, isBrowserVisible != visible else { return }
+        isBrowserVisible = visible
+        if visible {
+            loadCurrentDirectory()
+            performSearch()
+        } else {
+            directoryMonitor = nil
+            watchedDirectory = nil
+            directoryWork?.cancel()
+            directoryLoadID = UUID()
+            isLoadingDirectory = false
+            if let query = metadataQuery {
+                query.stop()
+                NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidFinishGathering, object: query)
+                NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidUpdate, object: query)
+                metadataQuery = nil
+            }
         }
     }
 
@@ -1422,7 +1448,7 @@ class FolderViewModel {
     private func updateStatusBar() {
         let count = files.count
         itemCountText = "\(count) item\(count == 1 ? "" : "s")"
-        
+
         do {
             let vals = try currentDir.resourceValues(forKeys: [.volumeAvailableCapacityKey])
             if let capacity = vals.volumeAvailableCapacity {
@@ -1437,7 +1463,7 @@ class FolderViewModel {
             availableDiskSpace = ""
         }
     }
-    
+
     func gitStage(file: FileItem) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }

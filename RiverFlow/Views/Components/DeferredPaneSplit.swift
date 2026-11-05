@@ -102,3 +102,56 @@ private struct PaneDividerGuide: View {
             }
     }
 }
+
+/// Reveal the new pane at its final size. Only the cover animates, so file
+/// views and the split divider are laid out once at their destination.
+struct PaneOpeningOverlay: View {
+    let pane: BrowserPane
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if let opening = pane.opening {
+            Group {
+                if !reduceMotion {
+                    PaneOpeningCover(direction: opening.direction) {
+                        pane.finishOpening(opening.id)
+                    }
+                } else {
+                    Color.clear.task { pane.finishOpening(opening.id) }
+                }
+            }
+            .id(opening.id)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+}
+
+private struct PaneOpeningCover: View {
+    let direction: TabSplit
+    let onFinish: () -> Void
+    @State private var isCovered = true
+
+    private var anchor: UnitPoint {
+        if direction.vertical { return direction.before ? .top : .bottom }
+        return direction.before ? .leading : .trailing
+    }
+
+    var body: some View {
+        Color(nsColor: .controlBackgroundColor)
+            .scaleEffect(x: direction.vertical || isCovered ? 1 : 0,
+                         y: !direction.vertical || isCovered ? 1 : 0,
+                         anchor: anchor)
+            .opacity(isCovered ? 1 : 0)
+            .task {
+                // Give the initial cover a frame before starting the reveal.
+                do { try await Task.sleep(for: .milliseconds(16)) }
+                catch { return }
+                withAnimation(.easeOut(duration: 0.24)) {
+                    isCovered = false
+                } completion: {
+                    onFinish()
+                }
+            }
+    }
+}

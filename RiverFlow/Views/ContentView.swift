@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openWindow) private var openWindow
     @State private var workspace = BrowserWorkspace()
@@ -11,7 +12,12 @@ struct ContentView: View {
     @State private var isMoveUpTargeted = false
     @State private var windowWidth: CGFloat = 400
 
+    @State private var paneFrames: [UUID: CGRect] = [:]
+    @State private var tabDrag = BrowserTabDragState()
+
     private var viewModel: FolderViewModel { workspace.activePane.viewModel }
+
+    private var paneAnimation: Animation? { reduceMotion ? nil : .easeInOut(duration: 0.20) }
 
     var body: some View {
         @Bindable var activePane = workspace.activePane
@@ -26,6 +32,8 @@ struct ContentView: View {
                 .navigationTitle("")
                 .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search")
         }
+        .overlay(alignment: .topLeading) { BrowserTabDragOverlay(drag: tabDrag) }
+        .coordinateSpace(name: "browserWorkspaceTabs")
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button(action: {
@@ -147,9 +155,8 @@ struct ContentView: View {
                             workspace.beginPanePlacement()
                         }
                     }
-                    if workspace.panes.count > 1 {
-                        Toggle("Show Pane Headers", isOn: $workspace.showsPaneHeaders)
-                    }
+                    Button("New Tab") { workspace.newTab(in: workspace.activePaneID) }
+                    Toggle("Show Pane Headers", isOn: $workspace.showsPaneHeaders)
                 } label: {
                     Label("Split View", systemImage: selectedLayout?.symbol ?? "rectangle.split.2x2")
                 }
@@ -200,7 +207,7 @@ struct ContentView: View {
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         .onChange(of: workspace.activePaneID) { _, _ in isMoveUpTargeted = false }
-        .onChange(of: workspace.panes.count) { _, _ in assignUndoManager() }
+        .onChange(of: workspace.panes.flatMap { $0.tabs.map(\.id) }) { _, _ in assignUndoManager() }
         .focusedSceneValue(\.activeFolderViewModel, viewModel)
         .focusedSceneValue(\.browserWorkspace, workspace)
         .handleKeyboardShortcuts(viewModel: viewModel, openWindow: { openWindow(id: "mainWindow") })
@@ -217,6 +224,8 @@ struct ContentView: View {
             viewModel.pasteFiles()
         }
     }
+
+
 
     private var selectedLayout: BrowserLayout? {
         if workspace.panes.count == 1 || workspace.isActivePaneExpanded { return .single }
@@ -259,7 +268,6 @@ struct ContentView: View {
             isActive: pane.id == workspace.activePaneID,
             showsPaneControls: workspace.panes.count > 1,
             showsPaneHeader: workspace.showsPaneHeaders,
-            isExpanded: workspace.isActivePaneExpanded,
             onActivate: {
                 if pane.id != workspace.activePaneID && !workspace.hasPresentedDialog {
                     workspace.activate(pane.id)
@@ -267,15 +275,20 @@ struct ContentView: View {
             },
             canSplit: workspace.canAddPane,
             onSplit: { workspace.splitPane(pane.id, vertically: $0) },
-            onDock: { id, vertical, before in
-                workspace.dockPane(id, beside: pane.id, vertically: vertical, before: before)
-            },
-            onClose: { workspace.closePane(pane.id) },
-            onExpand: {
-                workspace.activate(pane.id)
-                workspace.isActivePaneExpanded.toggle()
+            onNewTab: { workspace.newTab(in: pane.id) },
+            onSelectTab: { workspace.selectTab($0, in: pane.id) },
+            onCloseTab: { workspace.closeTab($0, in: pane.id) },
+            onTabDrag: { tab, point, ended in
+                updateTabDrag(tab, from: pane.id, at: point, ended: ended)
             }
         )
+        .id(pane.selectedTabID)
+        .transition(.opacity)
+        .animation(paneAnimation, value: pane.selectedTabID)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("browserWorkspaceTabs")) } action: {
+            paneFrames[pane.id] = $0
+        }
+        .overlay { PaneOpeningOverlay(pane: pane) }
         .overlay {
             if workspace.isPlacingPane && workspace.canAddPane {
                 PanePlacementOverlay(folderName: pane.viewModel.currentDirName) { edge in
@@ -293,33 +306,40 @@ struct ContentView: View {
         )
     }
 
+    private func updateTabDrag(_ tab: BrowserTab, from sourceID: UUID, at point: CGPoint, ended: Bool) {
+        let target = tabTarget(at: point, from: sourceID)
+        if ended {
+            tabDrag.title = nil
+            tabDrag.preview = nil
+            if let target {
+                workspace.moveTab(tab.id, to: target.paneID, split: target.zone.split)
+            }
+        } else {
+            if tabDrag.title == nil { tabDrag.title = tab.viewModel.currentDirName }
+            tabDrag.position = point
+            let preview = target.map { BrowserTabDragState.Preview(frame: $0.frame, zone: $0.zone) }
+            if tabDrag.preview != preview { tabDrag.preview = preview }
+        }
+    }
+
+    private func tabTarget(at point: CGPoint, from sourceID: UUID) -> (paneID: UUID, frame: CGRect, zone: TabDropZone)? {
+        guard !workspace.hasPresentedDialog, !workspace.isPlacingPane else { return nil }
+        let visiblePanes = workspace.isActivePaneExpanded ? [workspace.activePane] : workspace.panes
+        guard let pane = visiblePanes.first(where: { paneFrames[$0.id]?.contains(point) == true }),
+              let frame = paneFrames[pane.id] else { return nil }
+        let hasHeader = pane.tabs.count > 1 || workspace.showsPaneHeaders
+        let zone = TabDropZone(
+            point: CGPoint(x: point.x - frame.minX, y: point.y - frame.minY),
+            size: frame.size, headerHeight: hasHeader ? 34 : 0
+        )
+        if pane.id == sourceID && (zone == .center || pane.tabs.count == 1) { return nil }
+        return (pane.id, frame, zone)
+    }
+
     private func assignUndoManager() {
-        for pane in workspace.panes { pane.viewModel.undoManager = undoManager }
-    }
-}
-
-struct PaneOptionsMenu: View {
-    @Bindable var pane: BrowserPane
-    var onActivate: () -> Void = {}
-
-    private func activating<Value>(_ binding: Binding<Value>) -> Binding<Value> {
-        Binding(get: { binding.wrappedValue }, set: { onActivate(); binding.wrappedValue = $0 })
-    }
-
-    var body: some View {
-        @Bindable var model = pane.viewModel
-        Picker("View Style", selection: activating($pane.viewStyle)) {
-            ForEach(FileViewStyle.allCases) { style in
-                Label(style.rawValue, systemImage: style.iconName).tag(style)
-            }
+        for pane in workspace.panes {
+            for tab in pane.tabs { tab.viewModel.undoManager = undoManager }
         }
-        Picker("Sort By", selection: activating($model.currentSortingOption)) {
-            ForEach(FileSortOption.allCases) { option in
-                Label(option.rawValue, systemImage: option.iconName).tag(option)
-            }
-        }
-        Toggle("Show Hidden Files", isOn: activating($model.showHiddenFiles))
-        Toggle("Show Preview", isOn: activating($pane.isPreviewPresented))
     }
 }
 

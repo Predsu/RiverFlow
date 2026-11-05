@@ -1,15 +1,6 @@
 import SwiftUI
 import Foundation
 import Observation
-import UniformTypeIdentifiers
-
-private struct PaneDrag: Codable, Transferable {
-    let id: UUID
-    static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: UTType(exportedAs: "com.toriyukari.riverflow.pane"))
-    }
-}
-
 /// Custom SwiftUI preference key used to map file IDs to their bounding frame rectangles in screen space.
 private struct FileFramePreferenceKey: PreferenceKey {
     static var defaultValue: [UUID: CGRect] = [:]
@@ -98,32 +89,27 @@ struct GridContextMenu: View {
 }
 
 struct BrowserPaneView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var pane: BrowserPane
     let isActive: Bool
     let showsPaneControls: Bool
     let showsPaneHeader: Bool
-    let isExpanded: Bool
     let onActivate: () -> Void
     let canSplit: Bool
     let onSplit: (Bool) -> Void
-    let onDock: (UUID, Bool, Bool) -> Bool
-    let onClose: () -> Void
-    let onExpand: () -> Void
+    let onNewTab: () -> Void
+    let onSelectTab: (UUID) -> Void
+    let onCloseTab: (UUID) -> Void
+    let onTabDrag: (BrowserTab, CGPoint, Bool) -> Void
 
     private var viewModel: FolderViewModel { pane.viewModel }
-    @State private var goUpTrigger = 0
     @State private var lastAnchorFileId: UUID?
     @State private var fileFrames: [UUID: CGRect] = [:]
     @State private var selectionRect: CGRect? = nil
     @State private var dragStartLocation: CGPoint? = nil
     @State private var selectionBaseline: Set<UUID> = []
     @State private var dropTargetedFileId: UUID? = nil
-    @State private var isMoveUpTargeted = false
     @State private var paneWidth: CGFloat = 0
-    @State private var showsSearch = false
-    @State private var contentSize: CGSize = .zero
-    @State private var isDockTargeted = false
-    @FocusState private var isSearchFocused: Bool
     
 
     private var compactGrid: Bool { showsPaneControls && paneWidth < 460 }
@@ -165,19 +151,24 @@ struct BrowserPaneView: View {
     private func activateBrowser() {
         guard showsPaneControls else { return }
         onActivate()
-        isSearchFocused = false
         NSApp.keyWindow?.makeFirstResponder(nil)
     }
 
     var body: some View {
-        Group {
+        let displayedModel = viewModel
+        return VStack(spacing: 0) {
+            if showsTabStrip {
+                tabStrip.transition(.opacity)
+            }
             if showsPaneControls {
-                splitContent
-                    .background(Color(NSColor.controlBackgroundColor))
+                splitContent.background(Color(NSColor.controlBackgroundColor))
             } else {
                 singlePaneContent
             }
         }
+        .onAppear { displayedModel.setBrowserVisible(true) }
+        .onDisappear { displayedModel.setBrowserVisible(false) }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.20), value: showsTabStrip)
         .overlay(alignment: .top) {
             if showsPaneControls {
                 Rectangle()
@@ -187,13 +178,9 @@ struct BrowserPaneView: View {
             }
         }
         .background(PaneActivationObserver(onActivate: onActivate))
-        .onChange(of: isSearchFocused) { _, focused in
-            if focused { onActivate() }
-        }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { paneWidth = $0 }
         .onChange(of: viewModel.currentDir) { _, _ in
             viewModel.selectedFileIds = []
-            isMoveUpTargeted = false
             lastAnchorFileId = nil
             fileFrames = [:]
             selectionRect = nil
@@ -245,137 +232,13 @@ struct BrowserPaneView: View {
         }
     }
 
+    private var showsTabStrip: Bool {
+        showsPaneHeader || pane.tabs.count > 1
+    }
+
     private var splitContent: some View {
-        VStack(spacing: 0) {
-            if showsPaneHeader { navigationBar }
-            if (showsPaneHeader && showsSearch) || !viewModel.searchText.isEmpty { searchBar }
-            if showsPaneHeader || !viewModel.searchText.isEmpty { Divider() }
-            fileContent
-                .onGeometryChange(for: CGSize.self) { $0.size } action: { contentSize = $0 }
-                .overlay {
-                    if isDockTargeted {
-                        RoundedRectangle(cornerRadius: 5)
-                            .strokeBorder(Color.accentColor.opacity(0.65), lineWidth: 2)
-                            .padding(3)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .dropDestination(for: PaneDrag.self) { items, point in
-                    guard let item = items.first, showsPaneControls, !isExpanded else { return false }
-                    let edges = [point.x, contentSize.width - point.x, point.y, contentSize.height - point.y]
-                    guard let edge = edges.indices.min(by: { edges[$0] < edges[$1] }),
-                          edges[edge] <= 48 else { return false }
-                    return onDock(item.id, edge >= 2, edge == 0 || edge == 2)
-                } isTargeted: { isDockTargeted = $0 && showsPaneControls && !isExpanded }
-        }
-    }
-
-    private var navigationBar: some View {
-        HStack(spacing: 4) {
-            Button { activateBrowser(); viewModel.goBackward() } label: { Image(systemName: "chevron.left") }
-                .disabled(viewModel.historyBackward.isEmpty)
-                .help("Go Back")
-                .accessibilityLabel("Go Back")
-            Button { activateBrowser(); viewModel.goForward() } label: { Image(systemName: "chevron.right") }
-                .disabled(viewModel.historyForward.isEmpty)
-                .help("Go Forward")
-                .accessibilityLabel("Go Forward")
-            Button {
-                activateBrowser()
-                guard viewModel.currentDir.path != "/" else { return }
-                viewModel.goToParentDirectory()
-                goUpTrigger += 1
-            } label: {
-                Image(systemName: "arrow.up")
-                    .symbolEffect(.bounce.byLayer, options: .speed(8), value: goUpTrigger)
-            }
-            .opacity(viewModel.currentDir.path == "/" ? 0.4 : 1)
-            .help("Go To Parent Directory")
-            .accessibilityLabel("Go To Parent Directory")
-            .background(isMoveUpTargeted ? Color.accentColor.opacity(0.25) : Color.clear, in: Capsule())
-            .dropDestination(for: URL.self) { urls, _ in
-                guard viewModel.currentDir.path != "/" else { return false }
-                onActivate()
-                viewModel.handleDrop(urls: urls, to: viewModel.currentDir.deletingLastPathComponent())
-                return true
-            } isTargeted: { isMoveUpTargeted = $0 && viewModel.currentDir.path != "/" }
-
-            if showsPaneControls && !isExpanded {
-                Image(systemName: "folder")
-                    .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
-                    .padding(.leading, 4)
-                    .draggable(PaneDrag(id: pane.id))
-                    .help("Drag this folder icon to another pane’s edge to dock")
-                    .accessibilityLabel("Pane drag handle")
-            }
-
-            InteractivePathTitleView(
-                fullPath: viewModel.currentDir.path,
-                folderName: viewModel.currentDirName,
-                onNavigate: { activateBrowser(); viewModel.navigateTo(url: $0) },
-                onGoToFolder: { onActivate(); viewModel.isJumpToPathPresented = true },
-                onActivate: onActivate
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Button {
-                onActivate()
-                if showsSearch || !viewModel.searchText.isEmpty {
-                    viewModel.searchText = ""
-                    showsSearch = false
-                } else {
-                    showsSearch = true
-                }
-            } label: { Image(systemName: "magnifyingglass") }
-            .help("Search This Pane")
-            .accessibilityLabel("Search This Pane")
-
-            Menu {
-                Button("Split Right", systemImage: "rectangle.split.2x1") { onSplit(false) }
-                    .disabled(!canSplit)
-                Button("Split Down", systemImage: "rectangle.split.1x2") { onSplit(true) }
-                    .disabled(!canSplit)
-                Divider()
-                PaneOptionsMenu(pane: pane, onActivate: onActivate)
-                Divider()
-                Button("Refresh", systemImage: "arrow.clockwise") { activateBrowser(); viewModel.loadCurrentDirectory() }
-                if showsPaneControls {
-                    Divider()
-                    Button(isExpanded ? "Show All Panes" : "Expand Pane", systemImage: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right", action: onExpand)
-                    Button("Close Pane", systemImage: "xmark", action: onClose)
-                }
-            } label: { Image(systemName: "ellipsis") }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("Pane Options")
-            .accessibilityLabel("Pane Options")
-        }
-        .buttonStyle(.borderless)
-        .controlSize(.regular)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Material.bar)
-    }
-
-    private var searchBar: some View {
         @Bindable var model = viewModel
-        return VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Search this pane", text: $model.searchText)
-                    .focused($isSearchFocused)
-                    .onAppear { if showsSearch { isSearchFocused = true } }
-                    .textFieldStyle(.plain)
-                    .accessibilityLabel("Search this pane")
-                if !viewModel.searchText.isEmpty {
-                    Button { viewModel.searchText = "" } label: { Image(systemName: "xmark.circle.fill") }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .help("Clear Search")
-                        .accessibilityLabel("Clear Search")
-                }
-            }
+        return VStack(spacing: 0) {
             if !viewModel.searchText.isEmpty {
                 Picker("Search scope", selection: $model.searchScope) {
                     Text(viewModel.currentDirName).tag(SearchScope.currentFolder)
@@ -383,11 +246,97 @@ struct BrowserPaneView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                .padding(6)
+            }
+            fileContent
+        }
+    }
+
+    private var tabStrip: some View {
+        HStack(spacing: 6) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) {
+                    HStack(spacing: 4) {
+                        ForEach(pane.tabs) { tab in
+                            tabButton(tab)
+                                .id(tab.id)
+                                .transition(.opacity)
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.20), value: pane.tabs.map(\.id))
+                .onAppear { proxy.scrollTo(pane.selectedTabID) }
+            }
+            Button(action: onNewTab) {
+                Image(systemName: "plus")
+            }
+            .help("New Tab")
+            .accessibilityLabel("New Tab")
+            .disabled(!canSplit)
+            Button(action: { onSplit(false) }) {
+                Image(systemName: "rectangle.split.2x1")
+            }
+            .help("Split Right")
+            .accessibilityLabel("Split Right")
+            .disabled(!canSplit)
+            Button(action: { onSplit(true) }) {
+                Image(systemName: "rectangle.split.1x2")
+            }
+            .help("Split Down")
+            .accessibilityLabel("Split Down")
+            .disabled(!canSplit)
+        }
+        .buttonStyle(.borderless)
+        .padding(.horizontal, 7)
+        .frame(height: 34)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider().allowsHitTesting(false) }
+    }
+
+    private func tabButton(_ tab: BrowserTab) -> some View {
+        let selected = pane.selectedTabID == tab.id
+        return HStack(spacing: 5) {
+            Button { onSelectTab(tab.id) } label: {
+                Label(tab.viewModel.currentDirName, systemImage: "folder")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 170, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .help(tab.viewModel.currentDir.path)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .overlay {
+                GeometryReader { geometry in
+                    BrowserTabPointerTarget(
+                        origin: geometry.frame(in: .named("browserWorkspaceTabs")).origin,
+                        onClick: { onSelectTab(tab.id) },
+                        onDrag: { point, ended in onTabDrag(tab, point, ended) }
+                    )
+                    .accessibilityHidden(true)
+                }
+            }
+
+            if pane.tabs.count > 1 || showsPaneControls {
+                Button { onCloseTab(tab.id) } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption2.weight(.semibold))
+                }
+                .help("Close Tab")
+                .accessibilityLabel("Close Tab")
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Material.ultraThin)
+        .font(.callout)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(selected ? Color.primary.opacity(0.10) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+        .contextMenu {
+            Button("New Tab", action: onNewTab)
+            Button("Copy Folder Path") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(tab.viewModel.currentDir.path, forType: .string)
+            }
+        }
     }
 
     @ViewBuilder private var fileContent: some View {

@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-/// Long-lived pane state survives resizing and changes to the split hierarchy.
+/// A tab carries its browser state when moved to another pane.
 @Observable
-final class BrowserPane: Identifiable {
+final class BrowserTab: Identifiable {
     let id = UUID()
     let viewModel: FolderViewModel
     var viewStyle: FileViewStyle = .grid
@@ -11,6 +11,57 @@ final class BrowserPane: Identifiable {
 
     init(viewModel: FolderViewModel) {
         self.viewModel = viewModel
+    }
+}
+
+@Observable
+final class BrowserPane: Identifiable {
+    let id = UUID()
+    private(set) var tabs: [BrowserTab]
+    private(set) var selectedTabID: UUID
+    fileprivate(set) var opening: PaneOpening?
+
+    convenience init(viewModel: FolderViewModel) {
+        self.init(tab: BrowserTab(viewModel: viewModel))
+    }
+
+    init(tab: BrowserTab) {
+        tabs = [tab]
+        selectedTabID = tab.id
+    }
+
+    func finishOpening(_ id: UUID) {
+        if opening?.id == id { opening = nil }
+    }
+
+    var selectedTab: BrowserTab { tabs.first { $0.id == selectedTabID } ?? tabs[0] }
+    var viewModel: FolderViewModel { selectedTab.viewModel }
+    var viewStyle: FileViewStyle {
+        get { selectedTab.viewStyle }
+        set { selectedTab.viewStyle = newValue }
+    }
+    var isPreviewPresented: Bool {
+        get { selectedTab.isPreviewPresented }
+        set { selectedTab.isPreviewPresented = newValue }
+    }
+
+    fileprivate func selectTab(_ id: UUID) {
+        guard tabs.contains(where: { $0.id == id }) else { return }
+        selectedTabID = id
+        viewModel.reloadSidebarFavorites()
+    }
+
+    fileprivate func appendTab(_ tab: BrowserTab) {
+        tabs.append(tab)
+        selectTab(tab.id)
+    }
+
+    fileprivate func removeTab(_ id: UUID) {
+        guard tabs.count > 1, let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+        tabs.remove(at: index)
+        if selectedTabID == id {
+            selectTab(tabs[min(index, tabs.count - 1)].id)
+        }
     }
 }
 
@@ -38,7 +89,17 @@ enum BrowserLayout: String, CaseIterable, Identifiable {
     }
 }
 
-indirect enum PaneArrangement {
+struct TabSplit {
+    let vertical: Bool
+    let before: Bool
+}
+
+struct PaneOpening {
+    let id = UUID()
+    let direction: TabSplit
+}
+
+indirect enum PaneArrangement: Equatable {
     case pane(UUID)
     case split(vertical: Bool, PaneArrangement, PaneArrangement)
 
@@ -61,7 +122,7 @@ final class BrowserWorkspace {
     private(set) var layout: BrowserLayout = .single
     private(set) var customArrangement: PaneArrangement?
     var isActivePaneExpanded = false
-    var showsPaneHeaders = false
+    var showsPaneHeaders = true
     var isPlacingPane = false
     private let makeViewModel: (URL) -> FolderViewModel
 
@@ -107,6 +168,7 @@ final class BrowserWorkspace {
     func splitPane(_ id: UUID, vertically: Bool, before: Bool = false) {
         guard canAddPane, let source = panes.first(where: { $0.id == id }) else { return }
         let pane = duplicate(source)
+        pane.opening = PaneOpening(direction: TabSplit(vertical: vertically, before: before))
         let existing = PaneArrangement.pane(id)
         let inserted = PaneArrangement.pane(pane.id)
         customArrangement = arrangement.replacing(id, with:
@@ -120,12 +182,70 @@ final class BrowserWorkspace {
     @discardableResult
     func dockPane(_ id: UUID, beside target: UUID, vertically: Bool, before: Bool) -> Bool {
         guard !hasPresentedDialog, id != target, !isActivePaneExpanded,
-              panes.contains(where: { $0.id == id }), panes.contains(where: { $0.id == target }) else { return false }
+              let pane = panes.first(where: { $0.id == id }),
+              panes.contains(where: { $0.id == target }) else { return false }
         let moved = PaneArrangement.pane(id)
         let destination = PaneArrangement.pane(target)
         customArrangement = arrangement.replacing(id, with: nil)?.replacing(target, with:
             .split(vertical: vertically, before ? moved : destination, before ? destination : moved))
+        pane.opening = PaneOpening(direction: TabSplit(vertical: vertically, before: before))
         activate(id)
+        return true
+    }
+
+    func newTab(in paneID: UUID) {
+        guard !hasPresentedDialog, let pane = panes.first(where: { $0.id == paneID }) else { return }
+        pane.appendTab(duplicate(pane).selectedTab)
+        activate(paneID)
+    }
+
+    func selectTab(_ tabID: UUID, in paneID: UUID) {
+        guard !hasPresentedDialog, let pane = panes.first(where: { $0.id == paneID }) else { return }
+        pane.selectTab(tabID)
+        activate(paneID)
+    }
+
+    func closeTab(_ tabID: UUID, in paneID: UUID) {
+        guard !hasPresentedDialog, let pane = panes.first(where: { $0.id == paneID }),
+              pane.tabs.contains(where: { $0.id == tabID }) else { return }
+        if pane.tabs.count == 1 {
+            closePane(paneID)
+        } else {
+            pane.removeTab(tabID)
+        }
+    }
+
+    @discardableResult
+    func moveTab(_ tabID: UUID, to targetID: UUID, split: TabSplit? = nil) -> Bool {
+        guard !hasPresentedDialog, !isPlacingPane,
+              let source = panes.first(where: { $0.tabs.contains { $0.id == tabID } }),
+              let tab = source.tabs.first(where: { $0.id == tabID }),
+              let target = panes.first(where: { $0.id == targetID }) else { return false }
+
+        if let split {
+            if source.tabs.count == 1 {
+                return dockPane(source.id, beside: targetID, vertically: split.vertical, before: split.before)
+            }
+            let newPane = BrowserPane(tab: tab)
+            newPane.opening = PaneOpening(direction: split)
+            let existing = PaneArrangement.pane(targetID)
+            let inserted = PaneArrangement.pane(newPane.id)
+            customArrangement = arrangement.replacing(targetID, with:
+                .split(vertical: split.vertical, split.before ? inserted : existing, split.before ? existing : inserted))
+            source.removeTab(tabID)
+            panes.append(newPane)
+            activate(newPane.id)
+            isActivePaneExpanded = false
+        } else {
+            guard source.id != targetID else { return false }
+            if source.tabs.count == 1 {
+                closePane(source.id)
+            } else {
+                source.removeTab(tabID)
+            }
+            target.appendTab(tab)
+            activate(targetID)
+        }
         return true
     }
 
@@ -138,12 +258,18 @@ final class BrowserWorkspace {
     }
 
     func addPane() {
+        addPane(for: panes.count == 1 ? .columns : .grid)
+    }
+
+    private func addPane(for targetLayout: BrowserLayout) {
         guard canAddPane, panes.count < BrowserLayout.grid.paneCount else { return }
         if customArrangement != nil {
             splitPane(activePaneID, vertically: false)
             return
         }
         let pane = duplicate(activePane)
+        let opensDown = targetLayout == .rows || (targetLayout == .grid && panes.count == 2)
+        pane.opening = PaneOpening(direction: TabSplit(vertical: opensDown, before: false))
         panes.append(pane)
         activePaneID = pane.id
         isActivePaneExpanded = false
@@ -157,11 +283,12 @@ final class BrowserWorkspace {
         // When reducing the layout, always retain the pane the user is working in.
         let active = activePane
         if panes.count > newLayout.paneCount {
+            panes.forEach { $0.opening = nil }
             let retained = Array(panes.filter { $0.id != active.id }.prefix(newLayout.paneCount - 1))
             let retainedIDs = Set((retained + [active]).map(\.id))
             panes.removeAll { !retainedIDs.contains($0.id) }
         }
-        while panes.count < newLayout.paneCount { addPane() }
+        while panes.count < newLayout.paneCount { addPane(for: newLayout) }
         activePaneID = active.id
         layout = newLayout
         isActivePaneExpanded = false
@@ -170,6 +297,7 @@ final class BrowserWorkspace {
     func closePane(_ id: UUID) {
         guard !hasPresentedDialog, panes.count > 1, let index = panes.firstIndex(where: { $0.id == id }) else { return }
         isPlacingPane = false
+        panes.forEach { $0.opening = nil }
         customArrangement = customArrangement?.replacing(id, with: nil)
         panes.remove(at: index)
         if activePaneID == id { activate(panes[min(index, panes.count - 1)].id) }
