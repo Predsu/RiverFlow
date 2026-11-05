@@ -27,7 +27,8 @@ struct ContentView: View {
                 .id(workspace.activePaneID)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 420)
         } detail: {
-            paneLayout
+            DeferredSidebarDetail(content: paneLayout)
+                .frame(minWidth: detailMinimumSize.width, minHeight: detailMinimumSize.height)
                 .onExitCommand { workspace.isPlacingPane = false }
                 .navigationTitle("")
                 .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search")
@@ -234,13 +235,17 @@ struct ContentView: View {
         return workspace.layout
     }
 
+    private var detailMinimumSize: CGSize {
+        if workspace.panes.count == 1 { return CGSize(width: 600, height: 400) }
+        if workspace.isActivePaneExpanded { return CGSize(width: 230, height: 155) }
+        return workspace.arrangement.minimumSize
+    }
+
     @ViewBuilder private var paneLayout: some View {
         if workspace.isActivePaneExpanded || workspace.panes.count == 1 {
             paneView(workspace.activePane)
         } else {
-            let arrangement = workspace.arrangement
-            arrangementView(arrangement)
-                .frame(minWidth: arrangement.minimumSize.width, minHeight: arrangement.minimumSize.height)
+            arrangementView(workspace.arrangement)
         }
     }
 
