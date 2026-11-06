@@ -53,6 +53,10 @@ class ThumbnailManager {
         }
     }
     
+    func invalidate(_ url: URL) {
+        cache.removeObject(forKey: url as NSURL)
+    }
+
     /// Clears all cached thumbnails.
     func clearCache() {
         cache.removeAllObjects()

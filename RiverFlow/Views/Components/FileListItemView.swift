@@ -10,6 +10,7 @@ import SwiftUI
 /// - actions from `FileContextMenu`
 struct FileListItemView: View {
     let file: FileItem
+    var isCompact = false
     let isSelected: Bool
     var isTargeted: Bool = false
     let onTap: () -> Void
@@ -32,15 +33,17 @@ struct FileListItemView: View {
 
             Spacer()
 
-            Text(file.formattedDate)
+            if !isCompact {
+                Text(file.formattedDate)
                 .font(.caption)
                 .foregroundColor(.secondary)
-                .frame(width: 150, alignment: .leading)
+                    .frame(width: 150, alignment: .leading)
+            }
 
             Text(file.formattedSize)
                 .font(.caption)
                 .foregroundColor(.secondary)
-                .frame(width: 80, alignment: .trailing)
+                .frame(width: isCompact ? 64 : 80, alignment: .trailing)
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 6)

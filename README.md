@@ -64,6 +64,7 @@ Native macOS experience
 * Resizable live preview panel for a selected local file, using macOS Quick Look.
 * Integrated sound effects and launch splash screen.
 * Native support for Apple silicon and Intel Macs.
+* Infinite Split View with tabs mechanics
 
 ---
 

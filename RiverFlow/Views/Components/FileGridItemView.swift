@@ -29,6 +29,7 @@ import SwiftUI
 ///   - viewModel: Reference to the folder view model for state management and operations.
 struct FileGridItemView: View {
     let file: FileItem
+    var isCompact = false
     let isSelected: Bool
     var isTargeted: Bool = false
     let onTap: () -> Void
@@ -50,7 +51,7 @@ struct FileGridItemView: View {
     var body: some View {
         VStack(spacing: 8) {
             ZStack(alignment: .topTrailing) {
-                FileIconView(file: file, baseSize: 64)
+                FileIconView(file: file, baseSize: isCompact ? 42 : 64)
                 
                 if let status = viewModel.gitStatusMap[file.url.standardizedFileURL] {
                     GitBadgeView(status: status)
@@ -71,7 +72,7 @@ struct FileGridItemView: View {
             )
         }
         .padding(10)
-        .frame(width: 120, height: 110, alignment: .top)
+        .frame(width: isCompact ? 78 : 120, height: isCompact ? 76 : 110, alignment: .top)
         .background(
             ZStack {
                 if isSelected {

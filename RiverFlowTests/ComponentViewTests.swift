@@ -70,7 +70,7 @@ import SwiftUI
     func fileInfoViewAndPathTitleViewsBuildTheirContent() throws {
         let fileInfo = FileInfoView(file: makeFile())
         let folderInfo = FileInfoView(file: makeFile(name: "folder", itemType: .DIRECTORY))
-        let pathTitle = InteractivePathTitleView(fullPath: "/tmp/example", folderName: "example", width: .constant(800))
+        let pathTitle = InteractivePathTitleView(fullPath: "/tmp/example", folderName: "example", onNavigate: { _ in }, onGoToFolder: {})
 
         #expect(!bodyTypeName(of: fileInfo).isEmpty)
         #expect(!bodyTypeName(of: folderInfo).isEmpty)

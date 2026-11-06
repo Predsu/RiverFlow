@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 /// `FileItem` conforms to `Identifiable` for use in SwiftUI collections and `Transferable`
 /// for drag-and-drop support.
 struct FileItem: Identifiable {
-    let id = UUID()
+    var id = UUID()
     let url: URL
     let name: String
     let itemType: FileItemType
