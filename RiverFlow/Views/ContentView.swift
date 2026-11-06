@@ -32,12 +32,12 @@ struct ContentView: View {
         } detail: {
             DeferredSidebarDetail(content: paneLayout)
                 .frame(minWidth: detailMinimumSize.width, minHeight: detailMinimumSize.height)
+                .overlay(alignment: .topLeading) { BrowserTabDragOverlay(drag: tabDrag) }
+                .coordinateSpace(name: "browserWorkspaceTabs")
                 .onExitCommand { workspace.isPlacingPane = false }
                 .navigationTitle("")
                 .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search")
         }
-        .overlay(alignment: .topLeading) { BrowserTabDragOverlay(drag: tabDrag) }
-        .coordinateSpace(name: "browserWorkspaceTabs")
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button(action: {
@@ -315,33 +315,51 @@ struct ContentView: View {
     }
 
     private func updateTabDrag(_ tab: BrowserTab, from sourceID: UUID, at point: CGPoint, ended: Bool) {
-        let target = tabTarget(at: point, from: sourceID)
         if ended {
+            let target = tabTarget(at: point, in: tabDropGuides(from: sourceID))
             tabDrag.title = nil
             tabDrag.preview = nil
+            tabDrag.guides = []
             if let target {
                 workspace.moveTab(tab.id, to: target.paneID, split: target.zone.split)
             }
         } else {
-            if tabDrag.title == nil { tabDrag.title = tab.viewModel.currentDirName }
+            if tabDrag.title == nil {
+                tabDrag.title = tab.viewModel.currentDirName
+                tabDrag.guides = tabDropGuides(from: sourceID)
+            }
             tabDrag.position = point
+            let target = tabTarget(at: point, in: tabDrag.guides)
             let preview = target.map { BrowserTabDragState.Preview(frame: $0.frame, zone: $0.zone) }
             if tabDrag.preview != preview { tabDrag.preview = preview }
         }
     }
 
-    private func tabTarget(at point: CGPoint, from sourceID: UUID) -> (paneID: UUID, frame: CGRect, zone: TabDropZone)? {
-        guard !workspace.hasPresentedDialog, !workspace.isPlacingPane else { return nil }
+    private func tabDropGuides(from sourceID: UUID) -> [BrowserTabDragState.Guide] {
+        guard !workspace.hasPresentedDialog, !workspace.isPlacingPane,
+              let source = workspace.panes.first(where: { $0.id == sourceID }) else { return [] }
         let visiblePanes = workspace.isActivePaneExpanded ? [workspace.activePane] : workspace.panes
-        guard let pane = visiblePanes.first(where: { paneFrames[$0.id]?.contains(point) == true }),
-              let frame = paneFrames[pane.id] else { return nil }
-        let hasHeader = pane.tabs.count > 1 || workspace.showsPaneHeaders
+        return visiblePanes.compactMap { pane in
+            guard let frame = paneFrames[pane.id] else { return nil }
+            let isSource = pane.id == sourceID
+            guard !isSource || source.tabs.count > 1 else { return nil }
+            let edges: [TabDropZone] = [.left, .right, .top, .bottom]
+            return BrowserTabDragState.Guide(
+                id: pane.id, frame: frame,
+                headerHeight: pane.tabs.count > 1 || workspace.showsPaneHeaders ? 34 : 0,
+                zones: isSource ? edges : edges + [.center]
+            )
+        }
+    }
+
+    private func tabTarget(at point: CGPoint, in guides: [BrowserTabDragState.Guide]) -> (paneID: UUID, frame: CGRect, zone: TabDropZone)? {
+        guard let guide = guides.first(where: { $0.frame.contains(point) }) else { return nil }
         let zone = TabDropZone(
-            point: CGPoint(x: point.x - frame.minX, y: point.y - frame.minY),
-            size: frame.size, headerHeight: hasHeader ? 34 : 0
+            point: CGPoint(x: point.x - guide.frame.minX, y: point.y - guide.frame.minY),
+            size: guide.frame.size, headerHeight: guide.headerHeight
         )
-        if pane.id == sourceID && (zone == .center || pane.tabs.count == 1) { return nil }
-        return (pane.id, frame, zone)
+        guard guide.zones.contains(zone) else { return nil }
+        return (guide.id, guide.frame, zone)
     }
 
     private func updateDisplayedTabModels() {
