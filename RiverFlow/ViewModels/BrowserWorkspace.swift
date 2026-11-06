@@ -127,9 +127,10 @@ final class BrowserWorkspace {
     private let makeViewModel: (URL) -> FolderViewModel
 
     init(startDir: URL = URL(fileURLWithPath: PathAutocompleteService.userHomeDirectory),
+         initialTab: BrowserTab? = nil,
          makeViewModel: @escaping (URL) -> FolderViewModel = { FolderViewModel(startDir: $0, loadsAsynchronously: true) }) {
         self.makeViewModel = makeViewModel
-        let first = BrowserPane(viewModel: makeViewModel(startDir))
+        let first = BrowserPane(tab: initialTab ?? BrowserTab(viewModel: makeViewModel(startDir)))
         panes = [first]
         activePaneID = first.id
     }

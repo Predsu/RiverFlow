@@ -3,7 +3,9 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openWindow) private var openWindow
-    @State private var workspace = BrowserWorkspace()
+    @State private var workspace: BrowserWorkspace
+    private let tabTransfers: BrowserTabTransfers?
+    private let transferID: UUID?
     @State private var showSplash = !SplashOverlay.hasShownSplashInThisSession
 
     @State private var refreshTrigger = 0
@@ -14,6 +16,12 @@ struct ContentView: View {
     @State private var paneFrames: [UUID: CGRect] = [:]
     @State private var tabDrag = BrowserTabDragState()
     @State private var displayedTabModels: [UUID: FolderViewModel] = [:]
+
+    init(tabTransfers: BrowserTabTransfers? = nil, transferID: UUID? = nil) {
+        self.tabTransfers = tabTransfers
+        self.transferID = transferID
+        _workspace = State(initialValue: BrowserWorkspace(initialTab: transferID.flatMap { tabTransfers?.tab(for: $0) }))
+    }
 
     private var viewModel: FolderViewModel { workspace.activePane.viewModel }
 
@@ -208,6 +216,7 @@ struct ContentView: View {
         .onAppear {
             SoundEffects.warmUpAudioEngine()
             assignUndoManager()
+            if let transferID { tabTransfers?.finish(transferID) }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         .onChange(of: workspace.activePaneID) { _, _ in isMoveUpTargeted = false }
@@ -289,8 +298,8 @@ struct ContentView: View {
             onNewTab: { workspace.newTab(in: pane.id) },
             onSelectTab: { workspace.selectTab($0, in: pane.id) },
             onCloseTab: { workspace.closeTab($0, in: pane.id) },
-            onTabDrag: { tab, point, ended in
-                updateTabDrag(tab, from: pane.id, at: point, ended: ended)
+            onTabDrag: { tab, point, phase in
+                updateTabDrag(tab, from: pane.id, at: point, phase: phase)
             }
         )
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("browserWorkspaceTabs")) } action: {
@@ -314,16 +323,9 @@ struct ContentView: View {
         )
     }
 
-    private func updateTabDrag(_ tab: BrowserTab, from sourceID: UUID, at point: CGPoint, ended: Bool) {
-        if ended {
-            let target = tabTarget(at: point, in: tabDropGuides(from: sourceID))
-            tabDrag.title = nil
-            tabDrag.preview = nil
-            tabDrag.guides = []
-            if let target {
-                workspace.moveTab(tab.id, to: target.paneID, split: target.zone.split)
-            }
-        } else {
+    private func updateTabDrag(_ tab: BrowserTab, from sourceID: UUID, at point: CGPoint, phase: BrowserTabDragPhase) {
+        switch phase {
+        case .dragging:
             if tabDrag.title == nil {
                 tabDrag.title = tab.viewModel.currentDirName
                 tabDrag.guides = tabDropGuides(from: sourceID)
@@ -332,7 +334,35 @@ struct ContentView: View {
             let target = tabTarget(at: point, in: tabDrag.guides)
             let preview = target.map { BrowserTabDragState.Preview(frame: $0.frame, zone: $0.zone) }
             if tabDrag.preview != preview { tabDrag.preview = preview }
+            return
+        case .dropped:
+            if let target = tabTarget(at: point, in: tabDropGuides(from: sourceID)) {
+                workspace.moveTab(tab.id, to: target.paneID, split: target.zone.split)
+            }
+        case .droppedOutside(let window):
+            moveTabToNewWindow(tab, from: sourceID, sourceWindow: window)
         }
+
+        tabDrag.title = nil
+        tabDrag.preview = nil
+        tabDrag.guides = []
+    }
+
+    private func moveTabToNewWindow(_ tab: BrowserTab, from sourceID: UUID, sourceWindow: NSWindow) {
+        guard let tabTransfers, !workspace.hasPresentedDialog, !workspace.isPlacingPane,
+              let source = workspace.panes.first(where: { $0.id == sourceID }),
+              source.tabs.contains(where: { $0 === tab }) else { return }
+
+        let transferID = tabTransfers.prepare(tab) { [weak sourceWindow] in
+            // The destination now owns visibility and directory monitoring.
+            displayedTabModels.removeValue(forKey: tab.id)
+            if workspace.panes.count == 1 && source.tabs.count == 1 {
+                sourceWindow?.close()
+            } else {
+                workspace.closeTab(tab.id, in: sourceID)
+            }
+        }
+        openWindow(id: "mainWindow", value: transferID)
     }
 
     private func tabDropGuides(from sourceID: UUID) -> [BrowserTabDragState.Guide] {

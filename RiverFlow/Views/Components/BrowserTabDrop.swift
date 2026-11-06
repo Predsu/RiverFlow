@@ -69,11 +69,17 @@ struct BrowserTabDropPreview: View {
     }
 }
 
+enum BrowserTabDragPhase {
+    case dragging
+    case dropped
+    case droppedOutside(NSWindow)
+}
+
 /// Keeps horizontal scrolling and button tracking from taking over a tab drag.
 struct BrowserTabPointerTarget: NSViewRepresentable {
     let origin: CGPoint
     let onClick: () -> Void
-    let onDrag: (CGPoint, Bool) -> Void
+    let onDrag: (CGPoint, BrowserTabDragPhase) -> Void
 
     func makeNSView(context: Context) -> PointerView { PointerView() }
 
@@ -86,7 +92,7 @@ struct BrowserTabPointerTarget: NSViewRepresentable {
     final class PointerView: NSView {
         var origin = CGPoint.zero
         var onClick: (() -> Void)?
-        var onDrag: ((CGPoint, Bool) -> Void)?
+        var onDrag: ((CGPoint, BrowserTabDragPhase) -> Void)?
         private var start: CGPoint?
         private var dragging = false
 
@@ -102,7 +108,7 @@ struct BrowserTabPointerTarget: NSViewRepresentable {
             let location = event.locationInWindow
             guard dragging || hypot(location.x - start.x, location.y - start.y) >= 4 else { return }
             dragging = true
-            onDrag?(workspacePoint(for: event), false)
+            onDrag?(workspacePoint(for: event), .dragging)
         }
 
         override func mouseUp(with event: NSEvent) {
@@ -111,7 +117,13 @@ struct BrowserTabPointerTarget: NSViewRepresentable {
                 dragging = false
             }
             if dragging {
-                onDrag?(workspacePoint(for: event), true)
+                let phase: BrowserTabDragPhase
+                if let window, !window.frame.contains(window.convertPoint(toScreen: event.locationInWindow)) {
+                    phase = .droppedOutside(window)
+                } else {
+                    phase = .dropped
+                }
+                onDrag?(workspacePoint(for: event), phase)
             } else if start != nil, bounds.contains(convert(event.locationInWindow, from: nil)) {
                 onClick?()
             }

@@ -100,7 +100,7 @@ struct BrowserPaneView: View {
     let onNewTab: () -> Void
     let onSelectTab: (UUID) -> Void
     let onCloseTab: (UUID) -> Void
-    let onTabDrag: (BrowserTab, CGPoint, Bool) -> Void
+    let onTabDrag: (BrowserTab, CGPoint, BrowserTabDragPhase) -> Void
 
     private var viewModel: FolderViewModel { pane.viewModel }
     @State private var lastAnchorFileId: UUID?
@@ -322,7 +322,7 @@ struct BrowserPaneView: View {
                     BrowserTabPointerTarget(
                         origin: geometry.frame(in: .named("browserWorkspaceTabs")).origin,
                         onClick: { onSelectTab(tab.id) },
-                        onDrag: { point, ended in onTabDrag(tab, point, ended) }
+                        onDrag: { point, phase in onTabDrag(tab, point, phase) }
                     )
                     .accessibilityHidden(true)
                 }
