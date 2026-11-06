@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct ContentView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openWindow) private var openWindow
     @State private var workspace = BrowserWorkspace()
@@ -14,10 +13,14 @@ struct ContentView: View {
 
     @State private var paneFrames: [UUID: CGRect] = [:]
     @State private var tabDrag = BrowserTabDragState()
+    @State private var displayedTabModels: [UUID: FolderViewModel] = [:]
 
     private var viewModel: FolderViewModel { workspace.activePane.viewModel }
 
-    private var paneAnimation: Animation? { reduceMotion ? nil : .easeInOut(duration: 0.20) }
+    private var displayedTabs: [BrowserTab] {
+        let panes = workspace.isActivePaneExpanded ? [workspace.activePane] : workspace.panes
+        return panes.map(\.selectedTab)
+    }
 
     var body: some View {
         @Bindable var activePane = workspace.activePane
@@ -209,6 +212,9 @@ struct ContentView: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         .onChange(of: workspace.activePaneID) { _, _ in isMoveUpTargeted = false }
         .onChange(of: workspace.panes.flatMap { $0.tabs.map(\.id) }) { _, _ in assignUndoManager() }
+        .onChange(of: displayedTabs.map(\.id), initial: true) { _, _ in
+            updateDisplayedTabModels()
+        }
         .focusedSceneValue(\.activeFolderViewModel, viewModel)
         .focusedSceneValue(\.browserWorkspace, workspace)
         .handleKeyboardShortcuts(viewModel: viewModel, openWindow: { openWindow(id: "mainWindow") })
@@ -287,9 +293,6 @@ struct ContentView: View {
                 updateTabDrag(tab, from: pane.id, at: point, ended: ended)
             }
         )
-        .id(pane.selectedTabID)
-        .transition(.opacity)
-        .animation(paneAnimation, value: pane.selectedTabID)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("browserWorkspaceTabs")) } action: {
             paneFrames[pane.id] = $0
         }
@@ -339,6 +342,19 @@ struct ContentView: View {
         )
         if pane.id == sourceID && (zone == .center || pane.tabs.count == 1) { return nil }
         return (pane.id, frame, zone)
+    }
+
+    private func updateDisplayedTabModels() {
+        // Visibility follows selection across the whole window. A pane view can
+        // disappear during a transition even while its tab is still selected.
+        let current = Dictionary(uniqueKeysWithValues: displayedTabs.map { ($0.id, $0.viewModel) })
+        for (id, model) in displayedTabModels where current[id] == nil {
+            model.setBrowserVisible(false)
+        }
+        for (id, model) in current where displayedTabModels[id] == nil {
+            model.setBrowserVisible(true)
+        }
+        displayedTabModels = current
     }
 
     private func assignUndoManager() {

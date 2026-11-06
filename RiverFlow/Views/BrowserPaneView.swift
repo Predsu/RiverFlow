@@ -155,19 +155,23 @@ struct BrowserPaneView: View {
     }
 
     var body: some View {
-        let displayedModel = viewModel
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             if showsTabStrip {
                 tabStrip.transition(.opacity)
             }
-            if showsPaneControls {
-                splitContent.background(Color(NSColor.controlBackgroundColor))
-            } else {
-                singlePaneContent
+            Group {
+                if showsPaneControls {
+                    splitContent.background(Color(NSColor.controlBackgroundColor))
+                } else {
+                    singlePaneContent
+                }
             }
+            .onChange(of: viewModel.currentDir) { _, _ in
+                viewModel.selectedFileIds = []
+                resetSelectionGesture()
+            }
+            .id(pane.selectedTabID)
         }
-        .onAppear { displayedModel.setBrowserVisible(true) }
-        .onDisappear { displayedModel.setBrowserVisible(false) }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.20), value: showsTabStrip)
         .overlay(alignment: .top) {
             if showsPaneControls {
@@ -179,12 +183,8 @@ struct BrowserPaneView: View {
         }
         .background(PaneActivationObserver(onActivate: onActivate))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { paneWidth = $0 }
-        .onChange(of: viewModel.currentDir) { _, _ in
-            viewModel.selectedFileIds = []
-            lastAnchorFileId = nil
-            fileFrames = [:]
-            selectionRect = nil
-            dragStartLocation = nil
+        .onChange(of: pane.selectedTabID) { _, _ in
+            resetSelectionGesture()
         }
         .dropDestination(for: URL.self) { urls, _ in
             onActivate()
@@ -252,6 +252,13 @@ struct BrowserPaneView: View {
         }
     }
 
+    private func resetSelectionGesture() {
+        lastAnchorFileId = nil
+        fileFrames = [:]
+        selectionRect = nil
+        dragStartLocation = nil
+    }
+
     private var tabStrip: some View {
         HStack(spacing: 6) {
             ScrollViewReader { proxy in
@@ -260,13 +267,17 @@ struct BrowserPaneView: View {
                         ForEach(pane.tabs) { tab in
                             tabButton(tab)
                                 .id(tab.id)
-                                .transition(.opacity)
                         }
                     }
+                    // Scroll after the new tab has contributed its full width.
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { _ in
+                        proxy.scrollTo(pane.selectedTabID, anchor: .trailing)
+                    }
                 }
-                .scrollIndicators(.hidden)
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.20), value: pane.tabs.map(\.id))
-                .onAppear { proxy.scrollTo(pane.selectedTabID) }
+                .scrollIndicators(.never, axes: .horizontal)
+                .onChange(of: pane.selectedTabID) { _, selectedID in
+                    proxy.scrollTo(selectedID)
+                }
             }
             Button(action: onNewTab) {
                 Image(systemName: "plus")
