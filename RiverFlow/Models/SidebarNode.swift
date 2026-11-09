@@ -79,7 +79,7 @@ class SidebarNode: Identifiable, Hashable {
         guard !isLoaded || loadedWithHiddenFiles != showHidden else { return }
         isLoaded = true
         loadedWithHiddenFiles = showHidden
-        
+
         let fileManager = FileManager.default
         do {
             let keys: [URLResourceKey] = [.isDirectoryKey, .isHiddenKey]
@@ -89,7 +89,7 @@ class SidebarNode: Identifiable, Hashable {
                 includingPropertiesForKeys: keys,
                 options: options
             )
-            
+
             var subfolders: [SidebarNode] = []
             let existingChildren = Dictionary(uniqueKeysWithValues: children.map { ($0.url, $0) })
             for itemURL in contents {
@@ -97,17 +97,17 @@ class SidebarNode: Identifiable, Hashable {
                 let isDir = resourceValues?.isDirectory ?? false
                 let isHidden = resourceValues?.isHidden ?? false
                 let startsWithDot = itemURL.lastPathComponent.hasPrefix(".")
-                
+
                 if isDir {
                     if !showHidden && (isHidden || startsWithDot) {
                         continue
                     }
-                    
+
                     let ext = itemURL.pathExtension.lowercased()
                     if ext == "app" || ext == "xcodeproj" || ext == "xcworkspace" {
                         continue
                     }
-                    
+
                     subfolders.append(existingChildren[itemURL.standardizedFileURL] ?? SidebarNode(
                         name: itemURL.lastPathComponent,
                         url: itemURL.standardizedFileURL,
@@ -115,7 +115,7 @@ class SidebarNode: Identifiable, Hashable {
                     ))
                 }
             }
-            
+
             subfolders.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             self.children = subfolders
             self.hasSubfoldersCached = !subfolders.isEmpty
@@ -125,13 +125,13 @@ class SidebarNode: Identifiable, Hashable {
             self.hasSubfoldersCached = false
         }
     }
-    
+
     /// Reloads the child folders, preserving the expansion state of existing child nodes if possible.
     func reloadChildren(showHidden: Bool) {
         isLoaded = false
         hasSubfoldersCached = nil
         loadChildren(showHidden: showHidden)
-        
+
         for child in children {
             if child.isExpanded {
                 child.reloadChildren(showHidden: showHidden)

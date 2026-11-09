@@ -18,6 +18,19 @@ struct FileCollision: Identifiable {
 class FolderViewModel {
     var currentDir: URL
     var files: [FileItem] = []
+    private(set) var isLoadingDirectory = false
+    private(set) var directoryLoadError: String?
+    @ObservationIgnored private(set) var isBrowserVisible = true
+    private let loadsAsynchronously: Bool
+    private let filePasteboard: NSPasteboard
+    @ObservationIgnored private var directoryLoadID = UUID()
+    @ObservationIgnored private var loadedDirectory: URL?
+    @ObservationIgnored private var watchedDirectory: URL?
+    @ObservationIgnored private var directoryMonitor: DirectoryMonitor?
+    @ObservationIgnored private let directoryQueue = DispatchQueue(label: "RiverFlow.directory", qos: .userInitiated)
+    @ObservationIgnored private var directoryWork: DispatchWorkItem?
+    @ObservationIgnored private var filePasteboardChangeCount: Int?
+    private static let cutPasteboardType = NSPasteboard.PasteboardType("com.toriyukari.RiverFlow.cut-files")
     var currentSortingOption: FileSortOption = .name
     var sidebarRoots: [SidebarNode] = []
     private(set) var favoriteSidebarRoots: [SidebarNode] = []
@@ -84,6 +97,7 @@ class FolderViewModel {
     private var dropHadChanges = false
     
     deinit {
+        directoryWork?.cancel()
         if let query = metadataQuery {
             query.stop()
             NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidFinishGathering, object: query)
@@ -116,14 +130,17 @@ class FolderViewModel {
     }
     
     var selectedFiles: [FileItem] {
-        files.filter { selectedFileIds.contains($0.id) }
+        let candidates = searchScope == .thisMac && !searchText.isEmpty ? globalSearchResults : files
+        return candidates.filter { selectedFileIds.contains($0.id) }
     }
 
     var previewFiles: [FileItem] {
         sortedFiles.filter { selectedFileIds.contains($0.id) }
     }
     
-    init(startDir: URL = URL(fileURLWithPath: PathAutocompleteService.userHomeDirectory), sidebarRoots: [SidebarNode]? = nil, sidebarDefaults: UserDefaults = .standard) {
+    init(startDir: URL = URL(fileURLWithPath: PathAutocompleteService.userHomeDirectory), sidebarRoots: [SidebarNode]? = nil, sidebarDefaults: UserDefaults = .standard, loadsAsynchronously: Bool = false, filePasteboard: NSPasteboard = .general) {
+        self.filePasteboard = filePasteboard
+        self.loadsAsynchronously = loadsAsynchronously
         self.sidebarDefaults = sidebarDefaults
         var restoredPaths = Set<String>()
         var availableFavorites: [SidebarNode] = []
@@ -151,6 +168,30 @@ class FolderViewModel {
     private static func favoriteNode(for url: URL) -> SidebarNode {
         SidebarNode(name: url.path == "/" ? "/" : url.lastPathComponent,
                     url: url, iconName: "folder", isRoot: true)
+    }
+
+    /// Favorites are shared preferences; reload when another pane becomes active.
+    func reloadSidebarFavorites() {
+        let paths = sidebarDefaults.stringArray(forKey: Self.sidebarFavoritesKey) ?? []
+        let existingPaths = (favoriteSidebarRoots + unavailableFavoriteSidebarRoots).map { $0.url.path }
+        guard Set(paths) != Set(existingPaths) else { return }
+        var seen = Set<String>()
+        var available: [SidebarNode] = []
+        var unavailable: [SidebarNode] = []
+        for path in paths {
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            guard seen.insert(url.path).inserted else { continue }
+            let node = Self.favoriteNode(for: url)
+            if let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey]),
+               values.isDirectory == true, values.isPackage != true {
+                available.append(node)
+            } else {
+                unavailable.append(node)
+            }
+        }
+        favoriteSidebarRoots = available
+        unavailableFavoriteSidebarRoots = unavailable
+        expandToURL(currentDir)
     }
 
     /// Adds shortcuts only; dropping a directory never moves its contents.
@@ -312,6 +353,7 @@ class FolderViewModel {
     
     /// Triggers search processing or clears previous search states based on the active search scope.
     private func performSearch() {
+        guard isBrowserVisible else { return }
         let queryText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         
         if searchScope == .thisMac && !queryText.isEmpty {
@@ -403,67 +445,125 @@ class FolderViewModel {
             a.name.localizedStandardCompare(b.name) == .orderedAscending
         }
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.metadataQuery === query else { return }
             self.globalSearchResults = stableResults
         }
     }
     
-    /// Loads contents of current directory and updates file list.
+    /// UI panes read directory metadata off the main thread. Request IDs prevent
+    /// slow reads from replacing a more recently navigated folder or filter.
     func loadCurrentDirectory() {
-        ThumbnailManager.shared.clearCache()
-        
-        do {
-            let dataKeys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey, .isHiddenKey]
-            
-            let options: FileManager.DirectoryEnumerationOptions = showHiddenFiles ? [] : .skipsHiddenFiles
-            
-            let content = try FileManager.default.contentsOfDirectory(
-                at: currentDir,
-                includingPropertiesForKeys: dataKeys,
-                options: options
-            )
-            
-            let mappedFiles = autoreleasepool {
-                return content.map { url in
-                    let resourceValues = try? url.resourceValues(forKeys: Set(dataKeys))
-                    
-                    let isDir = resourceValues?.isDirectory ?? false
-                    let fileSize = resourceValues?.fileSize
-                    let modifDate = resourceValues?.contentModificationDate
-                    let finalSize = isDir ? nil : (fileSize != nil ? Int64(fileSize!) : nil)
-                    
-                    let isHiddenAttribute = resourceValues?.isHidden ?? false
-                    let startsWithDot = url.lastPathComponent.hasPrefix(".")
-                    let isFileHidden = isHiddenAttribute || startsWithDot
-                    
-                    
-                    
-                    return FileItem(
-                        url: url,
-                        name: url.lastPathComponent,
-                        itemType: isDir ? .DIRECTORY : .FILE,
-                        size: finalSize,
-                        modificationDate: modifDate,
-                        isHidden: isFileHidden
-                    )
+        guard isBrowserVisible else { return }
+        let directory = currentDir.standardizedFileURL
+        let includeHidden = showHiddenFiles
+        let requestID = UUID()
+        directoryLoadID = requestID
+        directoryWork?.cancel()
+        directoryLoadError = nil
+        if loadedDirectory != directory {
+            files = []
+            selectedFileIds = []
+            editingFileID = nil
+            itemCountText = ""
+            isGitRepo = false
+            gitBranch = nil
+            gitStatusMap = [:]
+        }
+        if loadsAsynchronously {
+            if watchedDirectory != directory {
+                watchedDirectory = directory
+                directoryMonitor = DirectoryMonitor(url: directory) { [weak self] in
+                    self?.loadCurrentDirectory()
                 }
             }
-            
-            self.files = mappedFiles
-            
+            isLoadingDirectory = true
+            let work = DispatchWorkItem { [weak self] in
+                let result = Result { try Self.readDirectory(directory, showHidden: includeHidden) }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.directoryLoadID == requestID else { return }
+                    self.applyDirectory(result, directory: directory)
+                }
+            }
+            directoryWork = work
+            directoryQueue.async(execute: work)
+        } else {
+            applyDirectory(Result { try Self.readDirectory(directory, showHidden: includeHidden) }, directory: directory)
+        }
+    }
+
+    /// Retain tab state, but stop live work while its browser is off screen.
+    func setBrowserVisible(_ visible: Bool) {
+        guard loadsAsynchronously, isBrowserVisible != visible else { return }
+        isBrowserVisible = visible
+        if visible {
+            loadCurrentDirectory()
+            performSearch()
+        } else {
+            directoryMonitor = nil
+            watchedDirectory = nil
+            directoryWork?.cancel()
+            directoryLoadID = UUID()
+            isLoadingDirectory = false
+            if let query = metadataQuery {
+                query.stop()
+                NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidFinishGathering, object: query)
+                NotificationCenter.default.removeObserver(self, name: .NSMetadataQueryDidUpdate, object: query)
+                metadataQuery = nil
+            }
+        }
+    }
+
+    private static func readDirectory(_ directory: URL, showHidden: Bool) throws -> [FileItem] {
+        let keys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey, .isHiddenKey]
+        let content = try FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: keys, options: showHidden ? [] : .skipsHiddenFiles
+        )
+        return autoreleasepool {
+            content.map { url in
+                let values = try? url.resourceValues(forKeys: Set(keys))
+                let isDirectory = values?.isDirectory ?? false
+                return FileItem(url: url, name: url.lastPathComponent,
+                                itemType: isDirectory ? .DIRECTORY : .FILE,
+                                size: isDirectory ? nil : values?.fileSize.map(Int64.init),
+                                modificationDate: values?.contentModificationDate,
+                                isHidden: (values?.isHidden ?? false) || url.lastPathComponent.hasPrefix("."))
+            }
+        }
+    }
+
+    private func applyDirectory(_ result: Result<[FileItem], Error>, directory: URL) {
+        isLoadingDirectory = false
+        switch result {
+        case .success(let items):
+            // Keep selection, rename, and SwiftUI cell identity stable on watcher refreshes.
+            let previous = Dictionary(uniqueKeysWithValues: files.map { ($0.url, $0) })
+            files = items.map { item in
+                var item = item
+                if let old = previous[item.url] {
+                    item.id = old.id
+                    if old.modificationDate != item.modificationDate || old.size != item.size {
+                        ThumbnailManager.shared.invalidate(item.url)
+                    }
+                }
+                return item
+            }
+            if searchScope != .thisMac || searchText.isEmpty {
+                selectedFileIds.formIntersection(Set(files.map(\.id)))
+            }
+            loadedDirectory = directory
             updateStatusBar()
             updateGitStatus()
-        } catch {
-            print("Error while reading directory \(error.localizedDescription)")
-            self.files = []
+        case .failure(let error):
+            files = []
+            selectedFileIds = []
+            directoryLoadError = error.localizedDescription
+            itemCountText = ""
         }
-        let target = currentDir.standardizedFileURL
-        if lastSidebarDirectory != target {
-            expandToURL(target)
-        }
+        if lastSidebarDirectory != directory { expandToURL(directory) }
         reloadSidebarTree()
     }
-    
+
     /// Reloads the loaded folders in the sidebar tree.
     func reloadSidebarTree() {
         for root in allSidebarRoots {
@@ -738,9 +838,10 @@ class FolderViewModel {
         self.pasteboardURLs = files.map { $0.url }
         self.isOperationCut = false
         
-        let pasteboard = NSPasteboard.general
+        let pasteboard = filePasteboard
         pasteboard.clearContents()
         pasteboard.writeObjects(files.map { $0.url as NSURL})
+        filePasteboardChangeCount = pasteboard.changeCount
     }
     
     /// Copies given files to the system pasteboard and flags the operation as cut.
@@ -748,9 +849,11 @@ class FolderViewModel {
         self.pasteboardURLs = files.map { $0.url }
         self.isOperationCut = true
         
-        let pasteboard = NSPasteboard.general
+        let pasteboard = filePasteboard
         pasteboard.clearContents()
         pasteboard.writeObjects(files.map { $0.url as NSURL})
+        pasteboard.setString("cut", forType: Self.cutPasteboardType)
+        filePasteboardChangeCount = pasteboard.changeCount
     }
     
     /// Renames a specified `FileItem`.
@@ -861,17 +964,20 @@ class FolderViewModel {
     
     /// Pastes or moves files from pasteboard into current directory.
     func pasteFiles() {
+        let pasteboard = filePasteboard
         let finalURLs: [URL]
-        if !pasteboardURLs.isEmpty {
+        let wasCut: Bool
+        // Explicit inputs are retained for callers importing a prepared transfer.
+        // Copies made through the UI always follow the current system clipboard.
+        if filePasteboardChangeCount == nil && !pasteboardURLs.isEmpty {
             finalURLs = pasteboardURLs
+            wasCut = isOperationCut
         } else {
-            let pasteboard = NSPasteboard.general
             finalURLs = (pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]) ?? []
+            wasCut = pasteboard.string(forType: Self.cutPasteboardType) == "cut"
         }
-        
         guard !finalURLs.isEmpty else { return }
-        
-        let wasCut = isOperationCut
+
         var pastedPairs: [(source: URL, destination: URL)] = []
         
         for sourceURL in finalURLs {
@@ -892,7 +998,7 @@ class FolderViewModel {
             }
             
             do {
-                if isOperationCut {
+                if wasCut {
                     try FileManager.default.moveItem(at: sourceURL, to: finalDestinationURL)
                     remapSidebarFavorites(from: normalizedSourceURL, to: finalDestinationURL)
                 } else {
@@ -903,9 +1009,18 @@ class FolderViewModel {
                 print("Error pasting file \(sourceURL.lastPathComponent): \(error.localizedDescription)")
             }
         }
-        if isOperationCut {
+        if wasCut {
             self.pasteboardURLs = []
             self.isOperationCut = false
+            if pasteboard.string(forType: Self.cutPasteboardType) == "cut" {
+                let moved = Set(pastedPairs.map { $0.source })
+                let remaining = finalURLs.filter { !moved.contains($0) }
+                pasteboard.clearContents()
+                if !remaining.isEmpty {
+                    pasteboard.writeObjects(remaining.map { $0 as NSURL })
+                    pasteboard.setString("cut", forType: Self.cutPasteboardType)
+                }
+            }
         }
         loadCurrentDirectory()
         
@@ -1333,7 +1448,7 @@ class FolderViewModel {
     private func updateStatusBar() {
         let count = files.count
         itemCountText = "\(count) item\(count == 1 ? "" : "s")"
-        
+
         do {
             let vals = try currentDir.resourceValues(forKeys: [.volumeAvailableCapacityKey])
             if let capacity = vals.volumeAvailableCapacity {
@@ -1348,7 +1463,7 @@ class FolderViewModel {
             availableDiskSpace = ""
         }
     }
-    
+
     func gitStage(file: FileItem) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }

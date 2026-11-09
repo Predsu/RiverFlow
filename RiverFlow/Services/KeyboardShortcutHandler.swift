@@ -8,8 +8,8 @@ final class KeyboardShortcutHandler {
     private init() {}
     
     /// Checks whether the user is actively focused on an editable text input.
-    static func isEditingText(in window: NSWindow? = NSApp.keyWindow) -> Bool {
-        guard let responder = window?.firstResponder else { return false }
+    static func isEditingText(in window: NSWindow? = nil) -> Bool {
+        guard let responder = (window ?? NSApp.keyWindow)?.firstResponder else { return false }
         if responder is NSTextField { return true }
         if let textView = responder as? NSTextView {
             return textView.isEditable
@@ -25,6 +25,7 @@ final class KeyboardShortcutHandler {
         viewModel: FolderViewModel,
         openWindow: (() -> Void)? = nil
     ) -> Bool {
+        guard !viewModel.isJumpToPathPresented, !viewModel.isGitCommitPresented, viewModel.fileCollision == nil else { return false }
         let isEditing = Self.isEditingText() || viewModel.editingFileID != nil
         guard let action = KeyboardShortcutAction.allCases.first(where: { $0.matches(event: event) }) else {
             return false
@@ -104,44 +105,41 @@ final class KeyboardShortcutHandler {
     }
 }
 
-/// SwiftUI ViewModifier that attaches keyboard shortcut handling to any view.
-struct KeyboardShortcutModifier: ViewModifier {
+/// The monitor belongs to one window and receives an updated model on every
+/// active-pane change. Inactive windows must never consume another window's keys.
+private struct KeyboardShortcutEventView: NSViewRepresentable {
     let viewModel: FolderViewModel
-    var openWindow: (() -> Void)?
-    
-    @State private var eventMonitor: Any?
-    
-    func body(content: Content) -> some View {
-        content
-            .onAppear {
-                setupMonitor()
-            }
-            .onDisappear {
-                removeMonitor()
-            }
-    }
-    
-    private func setupMonitor() {
-        guard eventMonitor == nil else { return }
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if KeyboardShortcutHandler.shared.handleKeyEvent(event, viewModel: viewModel, openWindow: openWindow) {
-                return nil
-            }
-            return event
+    let openWindow: (() -> Void)?
+
+    func makeNSView(context: Context) -> EventView { EventView() }
+    func updateNSView(_ view: EventView, context: Context) {
+        view.handleEvent = { event in
+            KeyboardShortcutHandler.shared.handleKeyEvent(event, viewModel: viewModel, openWindow: openWindow)
         }
     }
-    
-    private func removeMonitor() {
-        if let monitor = eventMonitor {
-            NSEvent.removeMonitor(monitor)
-            eventMonitor = nil
+
+    final class EventView: NSView {
+        var handleEvent: ((NSEvent) -> Bool)?
+        private var monitor: Any?
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self, let window = self.window,
+                      window.isKeyWindow, event.window === window else { return event }
+                return self.handleEvent?(event) == true ? nil : event
+            }
         }
+        deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
     }
 }
 
 extension View {
-    /// Enables keyboard shortcuts on this view hierarchy.
     func handleKeyboardShortcuts(viewModel: FolderViewModel, openWindow: (() -> Void)? = nil) -> some View {
-        self.modifier(KeyboardShortcutModifier(viewModel: viewModel, openWindow: openWindow))
+        background(KeyboardShortcutEventView(viewModel: viewModel, openWindow: openWindow))
     }
 }

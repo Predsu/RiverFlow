@@ -3,6 +3,7 @@ import SwiftUI
 /// App commands defining native macOS menu items and standard keyboard shortcuts.
 struct RiverFlowCommands: Commands {
     @FocusedValue(\.activeFolderViewModel) private var activeViewModel: FolderViewModel?
+    @FocusedValue(\.browserWorkspace) private var workspace: BrowserWorkspace?
     @Environment(\.openWindow) private var openWindow
     
     var body: some Commands {
@@ -47,6 +48,55 @@ struct RiverFlowCommands: Commands {
             .disabled(activeViewModel?.selectedFiles.isEmpty ?? true)
         }
         
+        CommandMenu("Pane") {
+            if let workspace, !workspace.hasPresentedDialog {
+                Button("New Tab") { workspace.newTab(in: workspace.activePaneID) }
+                    .keyboardShortcut("t", modifiers: [.command, .option])
+                Button("Close Active Tab") {
+                    workspace.closeTab(workspace.activePane.selectedTabID, in: workspace.activePaneID)
+                }
+                .disabled(workspace.panes.count == 1 && workspace.activePane.tabs.count == 1)
+                Divider()
+                Button(workspace.isPlacingPane ? "Cancel Placement" : "Place New Pane…") {
+                    if workspace.isPlacingPane {
+                        workspace.isPlacingPane = false
+                    } else {
+                        workspace.beginPanePlacement()
+                    }
+                }
+                Button("Split Right") { workspace.splitPane(workspace.activePaneID, vertically: false) }
+                    .keyboardShortcut("d", modifiers: [.command, .shift])
+                    .disabled(!workspace.canAddPane)
+                Button("Split Down") { workspace.splitPane(workspace.activePaneID, vertically: true) }
+                    .disabled(!workspace.canAddPane)
+                Menu("Layout") {
+                    ForEach(BrowserLayout.allCases) { layout in
+                        Button { workspace.setLayout(layout) } label: {
+                            Label(layout.rawValue, systemImage: layout.symbol)
+                        }
+                    }
+                }
+                Button(workspace.showsPaneHeaders ? "Hide Pane Headers" : "Show Pane Headers") {
+                    workspace.showsPaneHeaders.toggle()
+                }
+                Divider()
+                Button("Close Active Pane") { workspace.closePane(workspace.activePaneID) }
+                    .keyboardShortcut("w", modifiers: [.command, .shift])
+                    .disabled(workspace.panes.count == 1)
+                Button("Next Pane") {
+                    NSApp.keyWindow?.makeFirstResponder(nil)
+                    workspace.focusNextPane()
+                }
+                    .keyboardShortcut("`", modifiers: [.control])
+                    .disabled(workspace.panes.count == 1)
+                Button(workspace.isActivePaneExpanded ? "Show All Panes" : "Expand Active Pane") {
+                    workspace.isActivePaneExpanded.toggle()
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(workspace.panes.count == 1)
+            }
+        }
+
         CommandMenu("Go") {
             Button("Back") {
                 activeViewModel?.goBackward()
@@ -85,5 +135,16 @@ extension FocusedValues {
     var activeFolderViewModel: FolderViewModel? {
         get { self[ActiveFolderViewModelKey.self] }
         set { self[ActiveFolderViewModelKey.self] = newValue }
+    }
+}
+
+struct BrowserWorkspaceKey: FocusedValueKey {
+    typealias Value = BrowserWorkspace
+}
+
+extension FocusedValues {
+    var browserWorkspace: BrowserWorkspace? {
+        get { self[BrowserWorkspaceKey.self] }
+        set { self[BrowserWorkspaceKey.self] = newValue }
     }
 }
