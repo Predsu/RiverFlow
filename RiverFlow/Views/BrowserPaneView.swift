@@ -321,6 +321,7 @@ struct BrowserPaneView: View {
                 GeometryReader { geometry in
                     BrowserTabPointerTarget(
                         origin: geometry.frame(in: .named("browserWorkspaceTabs")).origin,
+                        title: tab.viewModel.currentDirName,
                         onClick: { onSelectTab(tab.id) },
                         onDrag: { point, phase in onTabDrag(tab, point, phase) }
                     )

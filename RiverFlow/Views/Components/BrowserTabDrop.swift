@@ -73,11 +73,13 @@ enum BrowserTabDragPhase {
     case dragging
     case dropped
     case droppedOutside(NSWindow)
+    case cancelled
 }
 
 /// Keeps horizontal scrolling and button tracking from taking over a tab drag.
 struct BrowserTabPointerTarget: NSViewRepresentable {
     let origin: CGPoint
+    let title: String
     let onClick: () -> Void
     let onDrag: (CGPoint, BrowserTabDragPhase) -> Void
 
@@ -85,16 +87,23 @@ struct BrowserTabPointerTarget: NSViewRepresentable {
 
     func updateNSView(_ view: PointerView, context: Context) {
         view.origin = origin
+        view.title = title
         view.onClick = onClick
         view.onDrag = onDrag
     }
 
+    static func dismantleNSView(_ view: PointerView, coordinator: ()) {
+        view.cancelDrag()
+    }
+
     final class PointerView: NSView {
         var origin = CGPoint.zero
+        var title = ""
         var onClick: (() -> Void)?
         var onDrag: ((CGPoint, BrowserTabDragPhase) -> Void)?
         private var start: CGPoint?
         private var dragging = false
+        private var previewPanel: NSPanel?
 
         override var isFlipped: Bool { true }
 
@@ -108,6 +117,9 @@ struct BrowserTabPointerTarget: NSViewRepresentable {
             let location = event.locationInWindow
             guard dragging || hypot(location.x - start.x, location.y - start.y) >= 4 else { return }
             dragging = true
+            if let window {
+                positionPreview(at: window.convertPoint(toScreen: location))
+            }
             onDrag?(workspacePoint(for: event), .dragging)
         }
 
@@ -117,9 +129,11 @@ struct BrowserTabPointerTarget: NSViewRepresentable {
                 dragging = false
             }
             if dragging {
+                hidePreview()
                 let phase: BrowserTabDragPhase
-                if let window, !window.frame.contains(window.convertPoint(toScreen: event.locationInWindow)) {
-                    phase = .droppedOutside(window)
+                if let window {
+                    let screenPoint = window.convertPoint(toScreen: event.locationInWindow)
+                    phase = window.frame.contains(screenPoint) ? .dropped : .droppedOutside(window)
                 } else {
                     phase = .dropped
                 }
@@ -127,6 +141,46 @@ struct BrowserTabPointerTarget: NSViewRepresentable {
             } else if start != nil, bounds.contains(convert(event.locationInWindow, from: nil)) {
                 onClick?()
             }
+        }
+
+        func cancelDrag() {
+            hidePreview()
+            start = nil
+            guard dragging else { return }
+            dragging = false
+            let callback = onDrag
+            DispatchQueue.main.async { callback?(.zero, .cancelled) }
+        }
+
+        private func positionPreview(at point: CGPoint) {
+            let panel: NSPanel
+            if let previewPanel {
+                panel = previewPanel
+            } else {
+                let content = NSHostingView(rootView: BrowserDraggedTab(title: title).padding(8))
+                content.appearance = effectiveAppearance
+                let size = content.fittingSize
+                panel = NSPanel(contentRect: CGRect(origin: .zero, size: size),
+                                styleMask: [.borderless, .nonactivatingPanel],
+                                backing: .buffered, defer: false)
+                panel.contentView = content
+                panel.backgroundColor = .clear
+                panel.isOpaque = false
+                panel.hasShadow = false
+                panel.ignoresMouseEvents = true
+                panel.hidesOnDeactivate = false
+                panel.level = .floating
+                panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+                previewPanel = panel
+            }
+            panel.setFrameOrigin(CGPoint(x: point.x - panel.frame.width / 2,
+                                         y: point.y - panel.frame.height / 2))
+            if !panel.isVisible { panel.orderFrontRegardless() }
+        }
+
+        private func hidePreview() {
+            previewPanel?.orderOut(nil)
+            previewPanel = nil
         }
 
         private func workspacePoint(for event: NSEvent) -> CGPoint {
@@ -153,8 +207,7 @@ final class BrowserTabDragState {
     }
 
     var guides: [Guide] = []
-    var title: String?
-    var position: CGPoint = .zero
+    var isDragging = false
     var preview: Preview?
 }
 
@@ -190,7 +243,6 @@ struct BrowserTabDragOverlay: View {
                     .frame(width: guide.frame.width, height: guide.frame.height)
                     .position(x: guide.frame.midX - origin.x, y: guide.frame.midY - origin.y)
                 }
-                BrowserDraggedTab(drag: drag, origin: origin)
             }
         }
         .allowsHitTesting(false)
@@ -199,23 +251,20 @@ struct BrowserTabDragOverlay: View {
 }
 
 private struct BrowserDraggedTab: View {
-    let drag: BrowserTabDragState
-    let origin: CGPoint
+    let title: String
 
     var body: some View {
-        if let title = drag.title {
-            Label(title, systemImage: "folder")
-                .font(.callout.weight(.medium))
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: 170)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-                .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(.separator) }
-                .shadow(color: .black.opacity(0.20), radius: 5, y: 2)
-                .fixedSize()
-                .position(x: drag.position.x - origin.x, y: drag.position.y - origin.y)
-        }
+        Label(title, systemImage: "folder")
+            .font(.callout.weight(.medium))
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .frame(maxWidth: 170)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+            .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(.separator) }
+            .shadow(color: .black.opacity(0.20), radius: 5, y: 2)
+            .fixedSize()
+            .accessibilityHidden(true)
     }
 }

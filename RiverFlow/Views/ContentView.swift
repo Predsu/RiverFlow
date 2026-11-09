@@ -326,11 +326,10 @@ struct ContentView: View {
     private func updateTabDrag(_ tab: BrowserTab, from sourceID: UUID, at point: CGPoint, phase: BrowserTabDragPhase) {
         switch phase {
         case .dragging:
-            if tabDrag.title == nil {
-                tabDrag.title = tab.viewModel.currentDirName
+            if !tabDrag.isDragging {
+                tabDrag.isDragging = true
                 tabDrag.guides = tabDropGuides(from: sourceID)
             }
-            tabDrag.position = point
             let target = tabTarget(at: point, in: tabDrag.guides)
             let preview = target.map { BrowserTabDragState.Preview(frame: $0.frame, zone: $0.zone) }
             if tabDrag.preview != preview { tabDrag.preview = preview }
@@ -341,9 +340,11 @@ struct ContentView: View {
             }
         case .droppedOutside(let window):
             moveTabToNewWindow(tab, from: sourceID, sourceWindow: window)
+        case .cancelled:
+            break
         }
 
-        tabDrag.title = nil
+        tabDrag.isDragging = false
         tabDrag.preview = nil
         tabDrag.guides = []
     }
