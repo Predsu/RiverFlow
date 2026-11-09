@@ -72,7 +72,7 @@ struct BrowserTabDropPreview: View {
 enum BrowserTabDragPhase {
     case dragging
     case dropped
-    case droppedOutside(NSWindow)
+    case droppedOutside(NSWindow, screenPoint: CGPoint)
     case cancelled
 }
 
@@ -133,7 +133,7 @@ struct BrowserTabPointerTarget: NSViewRepresentable {
                 let phase: BrowserTabDragPhase
                 if let window {
                     let screenPoint = window.convertPoint(toScreen: event.locationInWindow)
-                    phase = window.frame.contains(screenPoint) ? .dropped : .droppedOutside(window)
+                    phase = window.frame.contains(screenPoint) ? .dropped : .droppedOutside(window, screenPoint: screenPoint)
                 } else {
                     phase = .dropped
                 }

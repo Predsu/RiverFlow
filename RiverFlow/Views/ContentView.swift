@@ -213,10 +213,16 @@ struct ContentView: View {
                 .animation(.spring(response: 0.25, dampingFraction: 0.8), value: viewModel.isGitCommitPresented)
             }
         }
+        .background {
+            if let transferID, let tabTransfers {
+                DetachedTabWindowAttachment { window in
+                    tabTransfers.finish(transferID, in: window)
+                }
+            }
+        }
         .onAppear {
             SoundEffects.warmUpAudioEngine()
             assignUndoManager()
-            if let transferID { tabTransfers?.finish(transferID) }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         .onChange(of: workspace.activePaneID) { _, _ in isMoveUpTargeted = false }
@@ -338,8 +344,8 @@ struct ContentView: View {
             if let target = tabTarget(at: point, in: tabDropGuides(from: sourceID)) {
                 workspace.moveTab(tab.id, to: target.paneID, split: target.zone.split)
             }
-        case .droppedOutside(let window):
-            moveTabToNewWindow(tab, from: sourceID, sourceWindow: window)
+        case .droppedOutside(let window, let screenPoint):
+            moveTabToNewWindow(tab, from: sourceID, sourceWindow: window, dropPoint: screenPoint)
         case .cancelled:
             break
         }
@@ -349,12 +355,12 @@ struct ContentView: View {
         tabDrag.guides = []
     }
 
-    private func moveTabToNewWindow(_ tab: BrowserTab, from sourceID: UUID, sourceWindow: NSWindow) {
+    private func moveTabToNewWindow(_ tab: BrowserTab, from sourceID: UUID, sourceWindow: NSWindow, dropPoint: CGPoint) {
         guard let tabTransfers, !workspace.hasPresentedDialog, !workspace.isPlacingPane,
               let source = workspace.panes.first(where: { $0.id == sourceID }),
               source.tabs.contains(where: { $0 === tab }) else { return }
 
-        let transferID = tabTransfers.prepare(tab) { [weak sourceWindow] in
+        let transferID = tabTransfers.prepare(tab, dropPoint: dropPoint) { [weak sourceWindow] in
             // The destination now owns visibility and directory monitoring.
             displayedTabModels.removeValue(forKey: tab.id)
             if workspace.panes.count == 1 && source.tabs.count == 1 {
